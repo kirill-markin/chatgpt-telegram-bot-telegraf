@@ -2,7 +2,8 @@ import express from "express";
 import bodyParser from "body-parser";
 import dotenv from "dotenv";
 import fs from "fs";
-import { Telegraf } from "telegraf";
+import pkg from 'telegraf';
+const { Telegraf } = pkg;
 
 if (fs.existsSync(".env")) {
   dotenv.config();

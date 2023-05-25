@@ -12,6 +12,6 @@
     "body-parser": "^1.19.0",
     "dotenv": "^8.2.0",
     "fs": "0.0.1-security",
-    "telegraf": "^3.38.0"
+    "telegraf": "^4.12.2"
   }
 }
