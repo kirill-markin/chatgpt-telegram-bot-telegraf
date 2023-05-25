@@ -55,7 +55,7 @@ bot.use(async (ctx, next) => {
   console.log('Response time: %sms', ms)
 })
 
-bot.on('text', (ctx) => ctx.reply('Hello World'))
+bot.on('text', (ctx) => ctx.reply('Робот на обслуживании. Кирилл его дописывает. Обратитесь попозже.'))
 bot.launch()
 
 router.post("/webhook", (req, res) => {
