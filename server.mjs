@@ -41,6 +41,13 @@ async function sendMessage(message, buttontext, buttonurl) {
   });
 }
 
+bot.start((ctx) => ctx.reply('Welcome'))
+bot.help((ctx) => ctx.reply('Send me a sticker'))
+bot.on('sticker', (ctx) => ctx.reply('👍'))
+bot.hears('hi', (ctx) => ctx.reply('Hey there'))
+bot.command('oldschool', (ctx) => ctx.reply('Hello'))
+bot.launch()
+
 router.post("/webhook", (req, res) => {
   let data = req.body;
   if (data.type === "DEPLOY" && data.status === "SUCCESS") {
