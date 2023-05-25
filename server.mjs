@@ -41,11 +41,21 @@ async function sendMessage(message, buttontext, buttonurl) {
   });
 }
 
-bot.start((ctx) => ctx.reply('Welcome'))
-bot.help((ctx) => ctx.reply('Send me a sticker'))
-bot.on('sticker', (ctx) => ctx.reply('👍'))
-bot.hears('hi', (ctx) => ctx.reply('Hey there'))
-bot.command('oldschool', (ctx) => ctx.reply('Hello'))
+// bot.start((ctx) => ctx.reply('Welcome'))
+// bot.help((ctx) => ctx.reply('Send me a sticker'))
+// bot.on('sticker', (ctx) => ctx.reply('👍'))
+// bot.hears('hi', (ctx) => ctx.reply('Hey there'))
+// bot.command('oldschool', (ctx) => ctx.reply('Hello'))
+// bot.launch()
+
+bot.use(async (ctx, next) => {
+  const start = new Date()
+  await next()
+  const ms = new Date() - start
+  console.log('Response time: %sms', ms)
+})
+
+bot.on('text', (ctx) => ctx.reply('Hello World'))
 bot.launch()
 
 router.post("/webhook", (req, res) => {
