@@ -60,9 +60,9 @@ bot.on(message('video'), (ctx) => {
 bot.on(message('sticker'), (ctx) => ctx.reply('👍'));
 
 bot.on(message('voice'), (ctx) => {
+  const fileId = ctx.message.voice.file_id;
 
   // download the file
-  const fileId = ctx.message.voice.file_id;
   ctx.telegram.getFileLink(fileId)
     .then(url => {
       return axios({url, responseType: 'stream'});
@@ -161,7 +161,28 @@ bot.on(message('voice'), (ctx) => {
 });
 
 bot.on(message('text'), (ctx) => {
-  ctx.reply('Текст пока что не поддерживается. Бот проигнорирует это сообщение.');
+  const userText = ctx.message.text;
+  
+  // Send this text to OpenAI's Chat GPT-4 model
+  openai.createChatCompletion({
+    model: "gpt-4",
+    messages: [
+      {
+        role: "user", 
+        content: userText,
+      },
+    ],
+    temperature: 0.7,
+  })
+  .catch(e => {
+    console.error("An error has occurred during the chatGPT completion process:", e);
+  })
+  
+  // send the the answer to the user
+  .then((response) => {
+    ctx.reply(response.data.choices[0].message.content);
+  })
+
 });
 
 bot.launch()
