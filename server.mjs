@@ -4,7 +4,7 @@ import dotenv from "dotenv";
 import fs from "fs";
 import pkg from 'telegraf';
 const { Telegraf } = pkg;
-const { message } = pkg.filters;
+import { message, editedMessage, channelPost, editedChannelPost, callbackQuery } from "telegraf/filters";
 
 
 if (fs.existsSync(".env")) {
@@ -38,7 +38,10 @@ bot.help((ctx) => {
 bot.command('reset', (ctx) => {
   ctx.reply('Старые сообщения удалены из памяти.')
 });
-bot.hears(message("text"), (ctx) => {
+// bot.hears(/.+/s, (ctx) => {
+//   ctx.reply('Робот на обслуживании. Кирилл его дописывает. Обратитесь попозже.');
+// });
+bot.on(message("text"), (ctx) => {
   ctx.reply('Робот на обслуживании. Кирилл его дописывает. Обратитесь попозже.');
 });
 
