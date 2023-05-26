@@ -21,6 +21,38 @@ if (!process.env.TELEGRAM_BOT_TOKEN || !process.env.OPENAI_API_KEY) {
   );
 }
 
+// Connect to the postgress database
+import pkg_pg from 'pg';
+const { Client } = pkg_pg;
+const client = new Client({
+  connectionString: process.env.DATABASE_URL,
+  ssl: {
+    rejectUnauthorized: false
+  }
+});
+client.connect();
+
+// FIXME: This is a temporary solution to the problem of the database not being created
+// Select all the messages from the database
+const selectAllMessages = async () => {
+  const res = await client.query('SELECT * FROM messages');
+  console.log(res.rows);
+  return res.rows;
+}
+selectAllMessages();
+
+const selectMessagesBuChatId = async (chatId) => {
+  const res = await client.query('SELECT * FROM messages WHERE chat_id = $1', [chatId]);
+  console.log(res.rows);
+  return res.rows;
+}
+
+const insertMessage = async (role, content, chat_id) => {
+  const res = await client.query('INSERT INTO messages (role, content, chat_id) VALUES ($1, $2, $3)', [role, content, chat_id]);
+  console.log(res);
+  return res;
+}
+
 
 // BOT
 
@@ -117,14 +149,21 @@ bot.on(message('voice'), (ctx) => {
       console.error("An error has occurred during the transcription process:", e);
     })
 
-    // send text to chatGPT-4 for completion
+    // save the transcription to the database
     .then((response) => {
+      const transcription = response.data.text;
+      insertMessage("user", transcription, ctx.chat.id);
+      return transcription;
+    })
+
+    // send text to chatGPT-4 for completion
+    .then((transcription) => {
       return openai.createChatCompletion({
         model: "gpt-4",
         messages: [
           {
             role: "user", 
-            content: response.data.text,
+            content: transcription,
           },
         ],
         temperature: 0.7,
@@ -133,10 +172,17 @@ bot.on(message('voice'), (ctx) => {
     .catch(e => {
       console.error("An error has occurred during the chatGPT completion process:", e);
     })
+
+    // save the answer to the database
+    .then((response) => {
+      const answer = response.data.choices[0].message.content;
+      insertMessage("assistant", answer, ctx.chat.id);
+      return answer;
+    })
     
     // send the the answer to the user
-    .then((response) => {
-      ctx.reply(response.data.choices[0].message.content);
+    .then((answer) => {
+      ctx.reply(answer);
     })
 
     // Delete both files
