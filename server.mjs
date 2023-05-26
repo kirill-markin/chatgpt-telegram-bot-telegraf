@@ -32,24 +32,20 @@ const client = new Client({
 });
 client.connect();
 
-// FIXME: This is a temporary solution to the problem of the database not being created
-// Select all the messages from the database
+
 const selectAllMessages = async () => {
   const res = await client.query('SELECT * FROM messages');
   console.log(res.rows);
   return res.rows;
 }
-selectAllMessages();
 
-const selectMessagesBuChatId = async (chatId) => {
-  const res = await client.query('SELECT * FROM messages WHERE chat_id = $1', [chatId]);
-  console.log(res.rows);
+const selectMessagesBuChatIdGPTformat = async (chatId) => {
+  const res = await client.query('SELECT role, content FROM messages WHERE chat_id = $1', [chatId]);
   return res.rows;
 }
 
 const insertMessage = async (role, content, chat_id) => {
   const res = await client.query('INSERT INTO messages (role, content, chat_id) VALUES ($1, $2, $3)', [role, content, chat_id]);
-  console.log(res);
   return res;
 }
 
@@ -156,16 +152,17 @@ bot.on(message('voice'), (ctx) => {
       return transcription;
     })
 
-    // send text to chatGPT-4 for completion
+    // download all related messages from the database
     .then((transcription) => {
+      const messages = selectMessagesBuChatIdGPTformat(ctx.chat.id);
+      return messages
+    })
+
+    // send text to chatGPT-4 for completion
+    .then((messages) => {
       return openai.createChatCompletion({
         model: "gpt-4",
-        messages: [
-          {
-            role: "user", 
-            content: transcription,
-          },
-        ],
+        messages: messages,
         temperature: 0.7,
       });
     })
