@@ -70,7 +70,7 @@ bot.use(async (ctx, next) => {
   const start = new Date()
   await next()
   const ms = new Date() - start
-  console.log(`New message from user ${ctx.from.username}. Response time - ${ms}`)
+  console.log(`New message from user ${ctx.from.username}. Response time: ${ms}`)
 })
 
 const helpString = 'Бот GPT Кирилла Маркина - голосовой помощник, который понимает аудиосообщения на русском языке 😊'
@@ -83,7 +83,7 @@ bot.help((ctx) => {
 
 bot.command('reset', (ctx) => {
   deleteMessagesByChatId(ctx.chat.id);
-  ctx.reply('Старые сообщения удалены из памяти.')
+  ctx.reply('Старые сообщения удалены из памяти бота в этом чате.')
 });
 
 
