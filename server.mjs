@@ -15,9 +15,9 @@ if (fs.existsSync(".env")) {
   dotenv.config();
 }
 
-if (!process.env.TELEGRAM_BOT_TOKEN || !process.env.OPENAI_API_KEY) {
+if (!process.env.TELEGRAM_BOT_TOKEN || !process.env.OPENAI_API_KEY || !process.env.DATABASE_URL) {
   throw new Error(
-    "Please set the TELEGRAM_BOT_TOKEN and OPENAI_API_KEY environment variables"
+    "Please set the TELEGRAM_BOT_TOKEN and OPENAI_API_KEY and DATABASE_URL environment variables"
   );
 }
 

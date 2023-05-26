@@ -22,3 +22,8 @@ This example starts an [HTTP Module](https://nodejs.org/api/http.html) server.
 ## 📝 Notes
 
 The server started simply returns a `Hello World` payload. The server code is located in `server.mjs`.
+
+## From Kirill
+
+- `docker build -t my-test .`
+- `docker run -it my-test`
