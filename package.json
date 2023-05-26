@@ -8,10 +8,15 @@
     "start": "node server.mjs"
   },
   "dependencies": {
-    "express": "^4.17.1",
+    "axios": "^1.4.0",
     "body-parser": "^1.19.0",
     "dotenv": "^8.2.0",
+    "express": "^4.17.1",
+    "ffmpeg": "^0.0.4",
+    "fluent-ffmpeg": "^2.1.2",
     "fs": "0.0.1-security",
+    "openai": "^3.2.1",
+    "pg": "^8.11.0",
     "telegraf": "^4.12.2"
   }
 }
