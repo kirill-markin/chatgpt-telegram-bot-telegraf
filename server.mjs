@@ -206,25 +206,34 @@ bot.on(message('voice'), (ctx) => {
 bot.on(message('text'), (ctx) => {
   const userText = ctx.message.text;
   
-  // Send this text to OpenAI's Chat GPT-4 model
-  openai.createChatCompletion({
-    model: "gpt-4",
-    messages: [
-      {
-        role: "user", 
-        content: userText,
-      },
-    ],
-    temperature: 0.7,
-  })
-  .catch(e => {
-    console.error("An error has occurred during the chatGPT completion process:", e);
-  })
-  
-  // send the the answer to the user
-  .then((response) => {
-    ctx.reply(response.data.choices[0].message.content);
-  })
+  // save the message to the database
+  insertMessage("user", userText, ctx.chat.id);
+
+  // download all related messages from the database
+  const messages = selectMessagesBuChatIdGPTformat(ctx.chat.id)
+    .then(messages => {
+      // Send this text to OpenAI's Chat GPT-4 model
+      return openai.createChatCompletion({
+        model: "gpt-4",
+        messages: messages,
+        temperature: 0.7,
+      });
+    })
+    .catch(e => {
+      console.error("An error has occurred during the chatGPT completion process:", e);
+    })
+
+    // save the answer to the database
+    .then((response) => {
+      const answer = response.data.choices[0].message.content;
+      insertMessage("assistant", answer, ctx.chat.id);
+      return answer;
+    })
+    
+    // send the the answer to the user
+    .then((answer) => {
+      ctx.reply(answer);
+    })
 
 });
 
