@@ -4,8 +4,8 @@ import dotenv from "dotenv";
 import fs from "fs";
 import axios from 'axios';
 
-import pkg from 'telegraf';
-const { Telegraf } = pkg;
+import pkg_t from 'telegraf';
+const { Telegraf } = pkg_t;
 import { message, editedMessage, channelPost, editedChannelPost, callbackQuery } from "telegraf/filters";
 
 import ffmpeg from 'fluent-ffmpeg';
