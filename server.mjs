@@ -33,6 +33,8 @@ const client = new Client({
 client.connect();
 
 
+// Database functions
+
 const selectAllMessages = async () => {
   const res = await client.query('SELECT * FROM messages');
   console.log(res.rows);
@@ -46,6 +48,11 @@ const selectMessagesBuChatIdGPTformat = async (chatId) => {
 
 const insertMessage = async (role, content, chat_id) => {
   const res = await client.query('INSERT INTO messages (role, content, chat_id) VALUES ($1, $2, $3)', [role, content, chat_id]);
+  return res;
+}
+
+const deleteMessagesByChatId = async (chat_id) => {
+  const res = await client.query('DELETE FROM messages WHERE chat_id = $1', [chat_id]);
   return res;
 }
 
@@ -75,6 +82,7 @@ bot.help((ctx) => {
 });
 
 bot.command('reset', (ctx) => {
+  deleteMessagesByChatId(ctx.chat.id);
   ctx.reply('Старые сообщения удалены из памяти.')
 });
 
