@@ -57,6 +57,35 @@ const deleteMessagesByChatId = async (chat_id) => {
 }
 
 
+// OpenAI functions
+
+function createChatCompletionWithRetry(messages, retries = 5) {
+  return openai.createChatCompletion({
+    model: "gpt-4",
+    messages: messages,
+    temperature: 0.7,
+  })
+  .catch((error) => {
+    if (retries === 0) {
+      throw error;
+    }
+    console.error(`openai.createChatCompletion failed. Retries left: ${retries}`);
+    return createChatCompletionWithRetry(messages, retries - 1);
+  });
+}
+
+function createTranscriptionWithRetry(fileStream, retries = 3) {
+  return openai.createTranscription(fileStream, "whisper-1")
+    .catch((error) => {
+      if (retries === 0) {
+        throw error;
+      }
+      console.error(`openai.createTranscription failed. Retries left: ${retries}`);
+      return createTranscriptionWithRetry(fileStream, retries - 1);
+    });
+}
+
+
 // BOT
 
 const configuration = new Configuration({
@@ -70,7 +99,7 @@ bot.use(async (ctx, next) => {
   const start = new Date()
   await next()
   const ms = new Date() - start
-  console.log(`New message from user ${ctx.from.username}. Response time: ${ms}`)
+  console.log(`New message from user ${ctx.from.username}. Response time: ${ms} ms.`)
 })
 
 const helpString = 'Бот GPT Кирилла Маркина - голосовой помощник, который понимает аудиосообщения на русском языке 😊'
@@ -143,10 +172,8 @@ bot.on(message('voice'), (ctx) => {
 
     // send the file to the OpenAI API fot transcription
     .then((response) => {
-      const transcription = openai.createTranscription(
-        fs.createReadStream(`./${fileId}.mp3`),
-        "whisper-1"
-      );
+      // send the file to the OpenAI API for transcription with retry logic
+      const transcription = createTranscriptionWithRetry(fs.createReadStream(`./${fileId}.mp3`));
       return transcription;
     })
     .catch(e => {
@@ -166,13 +193,9 @@ bot.on(message('voice'), (ctx) => {
       return messages
     })
 
-    // send text to chatGPT-4 for completion
-    .then((messages) => {
-      return openai.createChatCompletion({
-        model: "gpt-4",
-        messages: messages,
-        temperature: 0.7,
-      });
+    .then(messages => {
+      // Send this text to OpenAI's Chat GPT-4 model with retry logic
+      return createChatCompletionWithRetry(messages);
     })
     .catch(e => {
       console.error("An error has occurred during the chatGPT completion process:", e);
@@ -220,12 +243,8 @@ bot.on(message('text'), (ctx) => {
   // download all related messages from the database
   const messages = selectMessagesBuChatIdGPTformat(ctx.chat.id)
     .then(messages => {
-      // Send this text to OpenAI's Chat GPT-4 model
-      return openai.createChatCompletion({
-        model: "gpt-4",
-        messages: messages,
-        temperature: 0.7,
-      });
+      // Send this text to OpenAI's Chat GPT-4 model with retry logic
+      return createChatCompletionWithRetry(messages);
     })
     .catch(e => {
       console.error("An error has occurred during the chatGPT completion process:", e);
