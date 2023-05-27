@@ -62,7 +62,7 @@ Before providing an answer check information above one more time
 Try to solve tasks step by step
 I will send you questions or topics to discuss and you will answer me
 You interface right now is a telegram messenger
-Some of messages you will receive from me will be transcribed from voice messages
+Some of messages you will receive from user was transcribed from voice messages
 `)
 const defaultPromptMessageObj = {
   "role": "assistant",
@@ -72,9 +72,32 @@ const defaultPromptMessageObj = {
 // OpenAI functions
 
 function createChatCompletionWithRetry(messages, retries = 5) {
+  // Calculate total length of messages and prompt
+  let totalLength = messages.reduce((acc, message) => acc + message.content.length, 0) + defaultPromptMessage.length;
+  
+  // lettersThreshold is the approximate limit of tokens for GPT-4 in letters
+  let messagesCleanned;
+
+  const lettersThreshold = 15000;
+  
+  if (totalLength <= lettersThreshold) {
+      messagesCleanned = [...messages]; // create a copy of messages if totalLength is within limit
+  } else {
+      // If totalLength exceeds the limit, create a subset of messages
+      const messagesCopy = [...messages].reverse(); // create a reversed copy of messages
+      messagesCleanned = [];
+  
+      while (totalLength > lettersThreshold) {
+          const message = messagesCopy.pop(); // remove the last message from the copy
+          totalLength -= message.content.length; // recalculate the totalLength
+      }
+  
+      messagesCleanned = messagesCopy.reverse(); // reverse the messages back to the original order
+  }
+  
   return openai.createChatCompletion({
     model: "gpt-4",
-    messages: [defaultPromptMessageObj, ...messages],
+    messages: [defaultPromptMessageObj, ...messagesCleanned],
     temperature: 0.7,
   })
   .catch((error) => {
@@ -153,14 +176,12 @@ bot.on(message('voice'), (ctx) => {
     })
     .then(response => {
       return new Promise((resolve, reject) => {
-        // console.log(`Attempting to write to: ./${fileId}.oga`);
         response.data.pipe(fs.createWriteStream(`./${fileId}.oga`))
           .on('error', e => {
             console.error("An error has occurred:", e);
             reject(e); // Reject promise on error
           })
           .on('finish', () => {
-            // console.log("File is saved.");
             resolve(); // Resolve promise when download is finished
           });
       });
@@ -168,7 +189,10 @@ bot.on(message('voice'), (ctx) => {
     .catch(e => {
       console.error("An error has occurred during the file download process:", e);
     })
-    
+    // sendChatAction 'typing'
+    .then(() => {
+      ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
+    })
     .then(() => {
       return new Promise((resolve, reject) => {
         ffmpeg(`./${fileId}.oga`)
@@ -178,7 +202,6 @@ bot.on(message('voice'), (ctx) => {
             reject(err);
           })
           .on('end', () => {
-            // console.log('Processing finished !');
             resolve();
           })
           .saveToFile(`./${fileId}.mp3`);
@@ -187,6 +210,11 @@ bot.on(message('voice'), (ctx) => {
     })
     .catch(e => {
       console.error("An error has occurred during the file conversion process:", e);
+    })
+
+    // sendChatAction 'typing'
+    .then(() => {
+      ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
     })
 
     // send the file to the OpenAI API fot transcription
@@ -212,8 +240,8 @@ bot.on(message('voice'), (ctx) => {
       return messages
     })
 
+    // Send this text to OpenAI's Chat GPT-4 model with retry logic
     .then(messages => {
-      // Send this text to OpenAI's Chat GPT-4 model with retry logic
       return createChatCompletionWithRetry(messages);
     })
     .catch(e => {
@@ -261,6 +289,11 @@ bot.on(message('text'), (ctx) => {
 
   // download all related messages from the database
   const messages = selectMessagesBuChatIdGPTformat(ctx.chat.id)
+    // sendChatAction 'typing'
+    .then((messages) => {
+      ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
+      return messages;
+    })
     .then(messages => {
       // Send this text to OpenAI's Chat GPT-4 model with retry logic
       return createChatCompletionWithRetry(messages);
