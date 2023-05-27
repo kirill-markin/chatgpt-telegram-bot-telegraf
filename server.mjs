@@ -35,12 +35,6 @@ client.connect();
 
 // Database functions
 
-const selectAllMessages = async () => {
-  const res = await client.query('SELECT * FROM messages');
-  console.log(res.rows);
-  return res.rows;
-}
-
 const selectMessagesBuChatIdGPTformat = async (chatId) => {
   const res = await client.query('SELECT role, content FROM messages WHERE chat_id = $1', [chatId]);
   return res.rows;
@@ -56,13 +50,29 @@ const deleteMessagesByChatId = async (chat_id) => {
   return res;
 }
 
+// default prompt message to add to the GPT-4 model
+const defaultPromptMessage = (
+`Act as assistant
+Your name is Donna
+You are female
+You should be friendly
+You should not use official tone
+Your answers should be simple, and laconic but informative
+Before providing an answer check information above one more time
+Try to solve tasks step by step
+I will send you questions or topics to discuss and you will answer me
+`)
+const defaultPromptMessageObj = {
+  "role": "assistant",
+  "content": defaultPromptMessage,
+};
 
 // OpenAI functions
 
 function createChatCompletionWithRetry(messages, retries = 5) {
   return openai.createChatCompletion({
     model: "gpt-4",
-    messages: messages,
+    messages: [defaultPromptMessageObj, ...messages],
     temperature: 0.7,
   })
   .catch((error) => {
