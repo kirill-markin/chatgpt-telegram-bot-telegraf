@@ -22,31 +22,32 @@ if (!process.env.TELEGRAM_BOT_TOKEN || !process.env.OPENAI_API_KEY || !process.e
 }
 
 // Connect to the postgress database
+
 import pkg_pg from 'pg';
-const { Client } = pkg_pg;
-const client = new Client({
+const { Pool } = pkg_pg;
+
+const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: {
     rejectUnauthorized: false
   }
 });
-client.connect();
 
 
 // Database functions
 
 const selectMessagesBuChatIdGPTformat = async (chatId) => {
-  const res = await client.query('SELECT role, content FROM messages WHERE chat_id = $1 ORDER BY id', [chatId]);
+  const res = await pool.query('SELECT role, content FROM messages WHERE chat_id = $1 ORDER BY id', [chatId]);
   return res.rows;
 }
 
 const insertMessage = async (role, content, chat_id) => {
-  const res = await client.query('INSERT INTO messages (role, content, chat_id) VALUES ($1, $2, $3)', [role, content, chat_id]);
+  const res = await pool.query('INSERT INTO messages (role, content, chat_id) VALUES ($1, $2, $3)', [role, content, chat_id]);
   return res;
 }
 
 const deleteMessagesByChatId = async (chat_id) => {
-  const res = await client.query('DELETE FROM messages WHERE chat_id = $1', [chat_id]);
+  const res = await pool.query('DELETE FROM messages WHERE chat_id = $1', [chat_id]);
   return res;
 }
 
