@@ -136,13 +136,6 @@ bot.use(async (ctx, next) => {
   await next()
   const ms = new Date() - start
   console.log(`New message from user ${ctx.from.username}. Response time: ${ms} ms.`)
-
-  // whait for 1-3 seconds and sendChatAction typing
-  const delay = Math.floor(Math.random() * 3) + 1;
-  setTimeout(() => {
-    ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
-  }
-  , delay * 1000);
 })
 
 const helpString = 'Бот GPT Кирилла Маркина - голосовой помощник, который понимает аудиосообщения на русском языке 😊'
@@ -166,157 +159,113 @@ bot.on(message('video'), (ctx) => {
   ctx.reply('Робот пока что не умеет работать с видео и проигнорирует это сообщение.');
 });
 bot.on(message('sticker'), (ctx) => ctx.reply('👍'));
+bot.on(message('voice'), async (ctx) => {
+  // whait for 1-3 seconds and sendChatAction typing
+  const delay = Math.floor(Math.random() * 3) + 1;
+  setTimeout(() => {
+    ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
+  }
+  , delay * 1000);
 
-bot.on(message('voice'), (ctx) => {
-  const fileId = ctx.message.voice.file_id;
+  try {
+    const fileId = ctx.message.voice.file_id;
 
-  // download the file
-  ctx.telegram.getFileLink(fileId)
-    .then(url => {
-      return axios({url, responseType: 'stream'});
-    })
-    .then(response => {
-      return new Promise((resolve, reject) => {
-        response.data.pipe(fs.createWriteStream(`./${fileId}.oga`))
-          .on('error', e => {
-            console.error("An error has occurred:", e);
-            reject(e); // Reject promise on error
-          })
-          .on('finish', () => {
-            resolve(); // Resolve promise when download is finished
-          });
-      });
-    })
-    .catch(e => {
-      console.error("An error has occurred during the file download process:", e);
-    })
-    // sendChatAction 'typing'
-    .then(() => {
-      ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
-    })
-    .then(() => {
-      return new Promise((resolve, reject) => {
-        ffmpeg(`./${fileId}.oga`)
-          .toFormat('mp3')
-          .on('error', (err) => {
-            console.error('An error occurred: ' + err.message);
-            reject(err);
-          })
-          .on('end', () => {
-            resolve();
-          })
-          .saveToFile(`./${fileId}.mp3`);
-          return;
-      });
-    })
-    .catch(e => {
-      console.error("An error has occurred during the file conversion process:", e);
-    })
+    // download the file
+    const url = await ctx.telegram.getFileLink(fileId);
+    const response = await axios({url, responseType: 'stream'});
 
-    // sendChatAction 'typing'
-    .then(() => {
-      ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
-    })
+    await new Promise((resolve, reject) => {
+      response.data.pipe(fs.createWriteStream(`./${fileId}.oga`))
+        .on('error', reject)
+        .on('finish', resolve);
+    });
 
-    // send the file to the OpenAI API fot transcription
-    .then((response) => {
-      // send the file to the OpenAI API for transcription with retry logic
-      const transcription = createTranscriptionWithRetry(fs.createReadStream(`./${fileId}.mp3`));
-      return transcription;
-    })
-    .catch(e => {
-      console.error("An error has occurred during the transcription process:", e);
-    })
+    await new Promise((resolve, reject) => {
+      ffmpeg(`./${fileId}.oga`)
+        .toFormat('mp3')
+        .on('error', reject)
+        .on('end', resolve)
+        .saveToFile(`./${fileId}.mp3`);
+    });
 
-    // save the transcription to the database
-    .then((response) => {
-      const transcription = response.data.text;
-      insertMessage("user", transcription, ctx.chat.id);
-      return transcription;
-    })
+    // send the file to the OpenAI API for transcription
+    const transcription = await createTranscriptionWithRetry(fs.createReadStream(`./${fileId}.mp3`));
+    const transcriptionText = transcription.data.text;
 
     // download all related messages from the database
-    .then((transcription) => {
-      const messages = selectMessagesBuChatIdGPTformat(ctx.chat.id);
-      return messages
-    })
+    let messages = await selectMessagesBuChatIdGPTformat(ctx.chat.id);
+
+    // Union the user message with messages
+    messages = messages.concat({
+      role: "user",
+      content: transcriptionText,
+    });
+
+    // save the transcription to the database
+    await insertMessage("user", transcriptionText, ctx.chat.id);
 
     // Send this text to OpenAI's Chat GPT-4 model with retry logic
-    .then(messages => {
-      return createChatCompletionWithRetry(messages);
-    })
-    .catch(e => {
-      console.error("An error has occurred during the chatGPT completion process:", e);
-    })
+    const chatResponse = await createChatCompletionWithRetry(messages);
 
     // save the answer to the database
-    .then((response) => {
-      const answer = response.data.choices[0].message.content;
-      insertMessage("assistant", answer, ctx.chat.id);
-      return answer;
-    })
-    
-    // send the the answer to the user
-    .then((answer) => {
-      ctx.reply(answer);
-    })
+    const answer = chatResponse.data.choices[0].message.content;
+    await insertMessage("assistant", answer, ctx.chat.id);
+
+    // send the answer to the user
+    ctx.reply(answer);
 
     // Delete both files
-    .then(() => {
-      fs.unlink(`./${fileId}.oga`, (err) => {
-        if (err) {
-          console.error(err)
-          return
-        }
-      })
-      fs.unlink(`./${fileId}.mp3`, (err) => {
-        if (err) {
-          console.error(err)
-          return
-        }
-      })
-    })
-    .catch(e => {
-      console.error("An error has occurred during the file deletion process:", e);
-    })
-
+    fs.unlink(`./${fileId}.oga`, (err) => {
+      if (err) {
+        console.error(err);
+      }
+    });
+    fs.unlink(`./${fileId}.mp3`, (err) => {
+      if (err) {
+        console.error(err);
+      }
+    });
+  } catch (e) {
+    console.error("An error has occurred:", e);
+  }
 });
 
-bot.on(message('text'), (ctx) => {
-  const userText = ctx.message.text;
+bot.on(message('text'), async (ctx) => {
+  // whait for 1-3 seconds and sendChatAction typing
+  const delay = Math.floor(Math.random() * 3) + 1;
+  setTimeout(() => {
+    ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
+  }
+  , delay * 1000);
+
+  try {
+    const userText = ctx.message.text;
+
+    // download all related messages from the database
+    let messages = await selectMessagesBuChatIdGPTformat(ctx.chat.id);
+
+    // save the message to the database
+    await insertMessage("user", userText, ctx.chat.id);
+
+    // Union the user message with messages
+    messages = messages.concat({
+      role: "user",
+      content: userText,
+    });
+
+    // Send this text to OpenAI's Chat GPT-4 model with retry logic
+    let response = await createChatCompletionWithRetry(messages);
   
-  // save the message to the database
-  insertMessage("user", userText, ctx.chat.id);
-
-  // download all related messages from the database
-  const messages = selectMessagesBuChatIdGPTformat(ctx.chat.id)
-    // sendChatAction 'typing'
-    .then((messages) => {
-      ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
-      return messages;
-    })
-    .then(messages => {
-      // Send this text to OpenAI's Chat GPT-4 model with retry logic
-      return createChatCompletionWithRetry(messages);
-    })
-    .catch(e => {
-      console.error("An error has occurred during the chatGPT completion process:", e);
-    })
-
     // save the answer to the database
-    .then((response) => {
-      const answer = response.data.choices[0].message.content;
-      insertMessage("assistant", answer, ctx.chat.id);
-      return answer;
-    })
-    
+    const answer = response.data.choices[0].message.content;
+    await insertMessage("assistant", answer, ctx.chat.id);
+
     // send the the answer to the user
-    .then((answer) => {
-      ctx.reply(answer);
-    })
-
+    ctx.reply(answer);
+  } catch(e) {
+    console.error("An error has occurred during the chatGPT completion process:", e);
+  }
 });
-
 bot.launch()
 
 
