@@ -61,6 +61,8 @@ Your answers should be simple, and laconic but informative
 Before providing an answer check information above one more time
 Try to solve tasks step by step
 I will send you questions or topics to discuss and you will answer me
+You interface right now is a telegram messenger
+Some of messages you will receive from me will be transcribed from voice messages
 `)
 const defaultPromptMessageObj = {
   "role": "assistant",
@@ -110,6 +112,13 @@ bot.use(async (ctx, next) => {
   await next()
   const ms = new Date() - start
   console.log(`New message from user ${ctx.from.username}. Response time: ${ms} ms.`)
+
+  // whait for 1-3 seconds and sendChatAction typing
+  const delay = Math.floor(Math.random() * 3) + 1;
+  setTimeout(() => {
+    ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
+  }
+  , delay * 1000);
 })
 
 const helpString = 'Бот GPT Кирилла Маркина - голосовой помощник, который понимает аудиосообщения на русском языке 😊'
