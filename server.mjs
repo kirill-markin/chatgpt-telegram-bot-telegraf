@@ -36,7 +36,7 @@ client.connect();
 // Database functions
 
 const selectMessagesBuChatIdGPTformat = async (chatId) => {
-  const res = await client.query('SELECT role, content FROM messages WHERE chat_id = $1', [chatId]);
+  const res = await client.query('SELECT role, content FROM messages WHERE chat_id = $1 ORDER BY id', [chatId]);
   return res.rows;
 }
 
