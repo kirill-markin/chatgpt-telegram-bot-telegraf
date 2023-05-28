@@ -136,35 +136,39 @@ async function createChatCompletionWithRetry(messages, retries = 5, timeoutMs = 
 }
 
 async function createChatCompletionWithRetryAndReduceHistory(messages, retries = 5, timeoutMs = 85000) {
-  // Calculate total length of messages and prompt
-  let totalLength = messages.reduce((acc, message) => acc + message.content.length, 0) + defaultPromptMessage.length;
-  
-  // lettersThreshold is the approximate limit of tokens for GPT-4 in letters
-  let messagesCleanned;
 
-  const lettersThreshold = 15000;
-  
-  if (totalLength <= lettersThreshold) {
-      messagesCleanned = [...messages]; // create a copy of messages if totalLength is within limit
-  } else {
-      // If totalLength exceeds the limit, create a subset of messages
-      const messagesCopy = [...messages].reverse(); // create a reversed copy of messages
-      messagesCleanned = [];
-  
-      while (totalLength > lettersThreshold) {
-          const message = messagesCopy.pop(); // remove the last message from the copy
-          totalLength -= message.content.length; // recalculate the totalLength
-      }
-  
-      messagesCleanned = messagesCopy.reverse(); // reverse the messages back to the original order
+  try {
+    // Calculate total length of messages and prompt
+    let totalLength = messages.reduce((acc, message) => acc + message.content.length, 0) + defaultPromptMessage.length;
+    
+    // lettersThreshold is the approximate limit of tokens for GPT-4 in letters
+    let messagesCleanned;
+
+    const lettersThreshold = 15000;
+    
+    if (totalLength <= lettersThreshold) {
+        messagesCleanned = [...messages]; // create a copy of messages if totalLength is within limit
+    } else {
+        // If totalLength exceeds the limit, create a subset of messages
+        const messagesCopy = [...messages].reverse(); // create a reversed copy of messages
+        messagesCleanned = [];
+    
+        while (totalLength > lettersThreshold) {
+            const message = messagesCopy.pop(); // remove the last message from the copy
+            totalLength -= message.content.length; // recalculate the totalLength
+        }
+    
+        messagesCleanned = messagesCopy.reverse(); // reverse the messages back to the original order
+    }
+    const chatGPTAnswer = await createChatCompletionWithRetry(
+      messages = [defaultPromptMessageObj, ...messagesCleanned],
+      retries,
+      timeoutMs
+    )
+    return chatGPTAnswer;
+  } catch (error) {
+    throw error;
   }
-
-  const chatGPTAnswer = await createChatCompletionWithRetry(
-    messages = [defaultPromptMessageObj, ...messagesCleanned],
-    retries,
-    timeoutMs
-  )
-  return chatGPTAnswer;
 }
 
 function createTranscriptionWithRetry(fileStream, retries = 3) {
