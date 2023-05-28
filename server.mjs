@@ -93,7 +93,7 @@ const defaultPromptMessageObj = {
 
 // OpenAI functions
 
-const timeoutMsDefault = 70000;
+const timeoutMsDefault = 2*60*1000;
 
 async function createChatCompletionWithRetry(messages, retries = 5, timeoutMs = timeoutMsDefault) {
   for(let i = 0; i < retries; i++) {
@@ -103,7 +103,7 @@ async function createChatCompletionWithRetry(messages, retries = 5, timeoutMs = 
           model: "gpt-4",
           messages: messages,
           temperature: 0.7,
-        }), 
+        }),
         timeoutMs,
       )
         .catch((error) => {
@@ -181,7 +181,7 @@ const configuration = new Configuration({
 });
 const openai = new OpenAIApi(configuration);
 
-const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
+const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN, {handlerTimeout: 12*60*1000});
 
 bot.use(async (ctx, next) => {
   const start = new Date()
@@ -256,7 +256,7 @@ bot.on(message('voice'), async (ctx) => {
     // send the file to the OpenAI API for transcription
     const transcription = await createTranscriptionWithRetry(fs.createReadStream(`./${fileId}.mp3`));
     const transcriptionText = transcription.data.text;
-    console.log(`User: ${ctx.from.username}, Chat: ${ctx.chat.id}: transcription received: ${transcriptionText}`);
+    console.log(`User: ${ctx.from.username}, Chat: ${ctx.chat.id}: transcription received.`);
 
     // download all related messages from the database
     let messages = await selectMessagesByChatIdGPTformat(ctx.chat.id);
@@ -304,7 +304,7 @@ bot.on(message('voice'), async (ctx) => {
 });
 
 bot.on(message('text'), async (ctx) => {
-  console.log(`User: ${ctx.from.username}, Chat: ${ctx.chat.id}: text received`);
+  console.log(`User: ${ctx.from.username}, Chat: ${ctx.chat.id}: text received.`);
 
   // whait for 1-3 seconds and sendChatAction typing
   const delay = Math.floor(Math.random() * 3) + 1;
