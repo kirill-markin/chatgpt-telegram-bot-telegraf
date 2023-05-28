@@ -101,6 +101,13 @@ for (const createTableQuery of createTableQueries) {
 }
 console.log('Related tables checked/created successfully');
 
+class NoOpenAiApiKeyError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = 'NoOpenAiApiKeyError';
+  }
+}
+
 
 // Database functions
 
@@ -108,6 +115,11 @@ const selectMessagesByChatIdGPTformat = async (ctx) => {
   const res = await pool.query('SELECT role, content FROM messages WHERE chat_id = $1 ORDER BY id', [ctx.chat.id]);
   console.log(toLogFormat(ctx.chat.id, ctx.from.username, `messages received from the database: ${res.rows.length}`));
   return res.rows;
+}
+
+const selectUserByUserId = async (user_id) => {
+  const res = await pool.query('SELECT * FROM users WHERE user_id = $1', [user_id]);
+  return res.rows[0];
 }
 
 const insertMessage = async ({role, content, chat_id}) => {
@@ -232,9 +244,33 @@ const defaultPromptMessageObj = {
 
 // OpenAI functions
 
+async function getUserSettingsAndOpenAi(user_id) {
+  const userSettings = await selectUserByUserId(user_id);
+  if (!userSettings) {
+    throw new Error(`User with user_id ${user_id} not found`);
+  }
+
+  const primaryUsers = process.env.PRIMARY_USERS_LIST.split(',');
+  if (
+    primaryUsers
+    && Array.isArray(primaryUsers)
+    && primaryUsers.includes(userSettings.username)
+  ) {
+    userSettings.openai_api_key = process.env.OPENAI_API_KEY;
+  }
+  if (!userSettings.openai_api_key) {
+    throw new NoOpenAiApiKeyError(`User with user_id ${user_id} has no openai_api_key`);
+  }
+  const configuration = new Configuration({
+    apiKey: userSettings.openai_api_key,
+  });
+  const openai = new OpenAIApi(configuration);
+  return {settings: userSettings, openai: openai}
+}
+
 const timeoutMsDefault = 2*60*1000;
 
-async function createChatCompletionWithRetry(messages, retries = 5, timeoutMs = timeoutMsDefault) {
+async function createChatCompletionWithRetry(messages, openai, retries = 5, timeoutMs = timeoutMsDefault) {
   for(let i = 0; i < retries; i++) {
     try {
       const chatGPTAnswer = await pTimeout(
@@ -266,7 +302,7 @@ async function createChatCompletionWithRetry(messages, retries = 5, timeoutMs = 
   }
 }
 
-async function createChatCompletionWithRetryAndReduceHistory(messages, retries = 5, timeoutMs = timeoutMsDefault) {
+async function createChatCompletionWithRetryAndReduceHistory(messages, openai, retries = 5, timeoutMs = timeoutMsDefault) {
   try {
     // Calculate total length of messages and prompt
     let totalLength = messages.reduce((acc, message) => acc + message.content.length, 0) + defaultPromptMessage.length;
@@ -292,6 +328,7 @@ async function createChatCompletionWithRetryAndReduceHistory(messages, retries =
     }
     const chatGPTAnswer = await createChatCompletionWithRetry(
       messages = [defaultPromptMessageObj, ...messagesCleanned],
+      openai,
       retries,
       timeoutMs,
     )
@@ -355,11 +392,6 @@ function saveAnswerToDB(chatResponse, ctx) {
 
 // BOT
 
-const configuration = new Configuration({
-	apiKey: process.env.OPENAI_API_KEY,
-});
-const openai = new OpenAIApi(configuration);
-
 const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN, {handlerTimeout: 12*60*1000});
 const waitAndLog = async (stopSignal, func) => {
   while (!stopSignal()) {
@@ -395,21 +427,11 @@ const helpString = `Бот GPT Кирилла Маркина - голосово�
 const errorString = `Произошла ошибка во время обработки сообщения. Скажите Кириллу — пусть починит. Telegram Кирилла: @kirmark`
 
 bot.start((ctx) => {
-  const primaryUsers = process.env.PRIMARY_USERS_LIST.split(',');;
-  let openai_api_key = null;
-  if (
-    primaryUsers
-    && Array.isArray(primaryUsers)
-    && primaryUsers.includes(ctx.from.username)
-  ) {
-    openai_api_key = process.env.OPENAI_API_KEY;
-  }
   insertUser({
     user_id: ctx.from.id,
     username: ctx.from.username,
     default_language_code: ctx.from.language_code,
     language_code: ctx.from.language_code,
-    openai_api_key: openai_api_key,
   });
   ctx.reply(helpString)
 });
@@ -557,6 +579,17 @@ bot.on(message('voice'), async (ctx) => {
   });
   
   try {
+    let userData = null;
+    try {
+      userData = await getUserSettingsAndOpenAi(ctx.from.id);
+    } catch (e) {
+      if (e instanceof NoOpenAiApiKeyError) {
+        ctx.reply('У вас не настроен OpenAI API ключ. Напишите /settings чтобы настроить его.');
+        return;
+      } else {
+        throw e;
+      }
+    }
     const fileId = ctx.message.voice.file_id;
 
     // download the file
@@ -625,7 +658,7 @@ bot.on(message('voice'), async (ctx) => {
     console.log(toLogFormat(ctx.chat.id, ctx.from.username, `new voice transcription saved to the database`));
 
     // Send this text to OpenAI's Chat GPT-4 model with retry logic
-    const chatResponse = await createChatCompletionWithRetryAndReduceHistory(messages);
+    const chatResponse = await createChatCompletionWithRetryAndReduceHistory(messages, userData.openai);
     console.log(toLogFormat(ctx.chat.id, ctx.from.username, `chatGPT response received`));
 
     // save the answer to the database
@@ -658,6 +691,17 @@ bot.on(message('text'), async (ctx) => {
   console.log(toLogFormat(ctx.chat.id, ctx.from.username, `[NEW] text received`));
 
   try {
+    let userData = null;
+    try {
+      userData = await getUserSettingsAndOpenAi(ctx.from.id);
+    } catch (e) {
+      if (e instanceof NoOpenAiApiKeyError) {
+        ctx.reply('У вас не настроен OpenAI API ключ. Напишите /settings чтобы настроить его.');
+        return;
+      } else {
+        throw e;
+      }
+    }
     const userText = ctx.message.text;
 
     // save the message to the database
@@ -701,7 +745,10 @@ bot.on(message('text'), async (ctx) => {
     });
 
     // Send this text to OpenAI's Chat GPT-4 model with retry logic
-    let chatResponse = await createChatCompletionWithRetryAndReduceHistory(messages);
+    let chatResponse = await createChatCompletionWithRetryAndReduceHistory(
+      messages, 
+      userData.openai,
+    );
     console.log(toLogFormat(ctx.chat.id, ctx.from.username, `chatGPT response received`));
   
     // save the answer to the database
