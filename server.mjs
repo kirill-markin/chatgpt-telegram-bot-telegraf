@@ -34,6 +34,17 @@ const pool = new Pool({
 });
 
 
+// utils
+
+function timeout(ms) {
+    return new Promise((resolve, reject) => {
+        setTimeout(() => {
+            reject(new Error("Timeout after " + ms + "ms"));
+        }, ms);
+    });
+}
+
+
 // Create needed tables if not exists
 
 const createTableQuery = `
@@ -92,48 +103,68 @@ const defaultPromptMessageObj = {
 
 // OpenAI functions
 
-function createChatCompletionWithRetry(messages, retries = 5) {
 
-  try {
-    // Calculate total length of messages and prompt
-    let totalLength = messages.reduce((acc, message) => acc + message.content.length, 0) + defaultPromptMessage.length;
-    
-    // lettersThreshold is the approximate limit of tokens for GPT-4 in letters
-    let messagesCleanned;
+async function createChatCompletionWithRetry(messages, retries = 5, timeoutMs = 85000) {
 
-    const lettersThreshold = 15000;
-    
-    if (totalLength <= lettersThreshold) {
-        messagesCleanned = [...messages]; // create a copy of messages if totalLength is within limit
-    } else {
-        // If totalLength exceeds the limit, create a subset of messages
-        const messagesCopy = [...messages].reverse(); // create a reversed copy of messages
-        messagesCleanned = [];
-    
-        while (totalLength > lettersThreshold) {
-            const message = messagesCopy.pop(); // remove the last message from the copy
-            totalLength -= message.content.length; // recalculate the totalLength
+    for(let i = 0; i < retries; i++){
+        try {
+            let chatGPTAnswer = await Promise.race([
+                openai.createChatCompletion(
+                {
+                    model: "gpt-4",
+                    messages: messages,
+                    temperature: 0.7,
+                }),
+                timeout(timeoutMs)
+            ]);
+
+            if (chatGPTAnswer.status !== 200) {
+                throw new Error(`openai.createChatCompletion failed with status ${chatGPTAnswer.status}`);
+            }
+             
+            return chatGPTAnswer;
+        } catch (error) {
+            if (error.message.startsWith("Timeout after")) {
+                console.error(`openai.createChatCompletion timed out. Retries left: ${retries - i - 1}`);
+            } else {
+                console.error(`openai.createChatCompletion failed. Retries left: ${retries - i - 1}`);
+            }
+            
+            if(i === retries - 1) throw error;
         }
-    
-        messagesCleanned = messagesCopy.reverse(); // reverse the messages back to the original order
     }
+}
 
-    const chatGPTAnswer = openai.createChatCompletion(
-      {
-        model: "gpt-4",
-        messages: [defaultPromptMessageObj, ...messagesCleanned],
-        temperature: 0.7,
+async function createChatCompletionWithRetryAndReduceHistory(messages, retries = 5, timeoutMs = 85000) {
+  // Calculate total length of messages and prompt
+  let totalLength = messages.reduce((acc, message) => acc + message.content.length, 0) + defaultPromptMessage.length;
+  
+  // lettersThreshold is the approximate limit of tokens for GPT-4 in letters
+  let messagesCleanned;
+
+  const lettersThreshold = 15000;
+  
+  if (totalLength <= lettersThreshold) {
+      messagesCleanned = [...messages]; // create a copy of messages if totalLength is within limit
+  } else {
+      // If totalLength exceeds the limit, create a subset of messages
+      const messagesCopy = [...messages].reverse(); // create a reversed copy of messages
+      messagesCleanned = [];
+  
+      while (totalLength > lettersThreshold) {
+          const message = messagesCopy.pop(); // remove the last message from the copy
+          totalLength -= message.content.length; // recalculate the totalLength
       }
-    )
-    
-    return chatGPTAnswer
-  } catch (error) {
-    if (retries === 0) {
-      throw error;
-    }
-    console.error(`openai.createChatCompletion failed. Retries left: ${retries}`);
-    return createChatCompletionWithRetry(messages, retries - 1);
+  
+      messagesCleanned = messagesCopy.reverse(); // reverse the messages back to the original order
   }
+
+  const chatGPTAnswer = await createChatCompletionWithRetry(
+    messages = [defaultPromptMessageObj, ...messagesCleanned],
+    retries,
+    timeoutMs
+  )
+  return chatGPTAnswer;
 }
 
 function createTranscriptionWithRetry(fileStream, retries = 3) {
@@ -247,7 +278,7 @@ bot.on(message('voice'), async (ctx) => {
     console.log(`User: ${ctx.from.username}, Chat: ${ctx.chat.id}: new transcription saved to the database`);
 
     // Send this text to OpenAI's Chat GPT-4 model with retry logic
-    const chatResponse = await createChatCompletionWithRetry(messages);
+    const chatResponse = await createChatCompletionWithRetryAndReduceHistory(messages);
     console.log(`User: ${ctx.from.username}, Chat: ${ctx.chat.id}: chatGPT response received`);
 
     // save the answer to the database
@@ -305,7 +336,7 @@ bot.on(message('text'), async (ctx) => {
     });
 
     // Send this text to OpenAI's Chat GPT-4 model with retry logic
-    let response = await createChatCompletionWithRetry(messages);
+    let response = await createChatCompletionWithRetryAndReduceHistory(messages);
     console.log(`User: ${ctx.from.username}, Chat: ${ctx.chat.id}: chatGPT response received`);
   
     // save the answer to the database
