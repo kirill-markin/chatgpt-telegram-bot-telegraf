@@ -73,41 +73,47 @@ const defaultPromptMessageObj = {
 // OpenAI functions
 
 function createChatCompletionWithRetry(messages, retries = 5) {
-  // Calculate total length of messages and prompt
-  let totalLength = messages.reduce((acc, message) => acc + message.content.length, 0) + defaultPromptMessage.length;
-  
-  // lettersThreshold is the approximate limit of tokens for GPT-4 in letters
-  let messagesCleanned;
 
-  const lettersThreshold = 15000;
-  
-  if (totalLength <= lettersThreshold) {
-      messagesCleanned = [...messages]; // create a copy of messages if totalLength is within limit
-  } else {
-      // If totalLength exceeds the limit, create a subset of messages
-      const messagesCopy = [...messages].reverse(); // create a reversed copy of messages
-      messagesCleanned = [];
-  
-      while (totalLength > lettersThreshold) {
-          const message = messagesCopy.pop(); // remove the last message from the copy
-          totalLength -= message.content.length; // recalculate the totalLength
+  try {
+    // Calculate total length of messages and prompt
+    let totalLength = messages.reduce((acc, message) => acc + message.content.length, 0) + defaultPromptMessage.length;
+    
+    // lettersThreshold is the approximate limit of tokens for GPT-4 in letters
+    let messagesCleanned;
+
+    const lettersThreshold = 15000;
+    
+    if (totalLength <= lettersThreshold) {
+        messagesCleanned = [...messages]; // create a copy of messages if totalLength is within limit
+    } else {
+        // If totalLength exceeds the limit, create a subset of messages
+        const messagesCopy = [...messages].reverse(); // create a reversed copy of messages
+        messagesCleanned = [];
+    
+        while (totalLength > lettersThreshold) {
+            const message = messagesCopy.pop(); // remove the last message from the copy
+            totalLength -= message.content.length; // recalculate the totalLength
+        }
+    
+        messagesCleanned = messagesCopy.reverse(); // reverse the messages back to the original order
+    }
+
+    const chatGPTAnswer = openai.createChatCompletion(
+      {
+        model: "gpt-4",
+        messages: [defaultPromptMessageObj, ...messagesCleanned],
+        temperature: 0.7,
       }
-  
-      messagesCleanned = messagesCopy.reverse(); // reverse the messages back to the original order
-  }
-  
-  return openai.createChatCompletion({
-    model: "gpt-4",
-    messages: [defaultPromptMessageObj, ...messagesCleanned],
-    temperature: 0.7,
-  })
-  .catch((error) => {
+    )
+    
+    return chatGPTAnswer
+  } catch (error) {
     if (retries === 0) {
       throw error;
     }
     console.error(`openai.createChatCompletion failed. Retries left: ${retries}`);
     return createChatCompletionWithRetry(messages, retries - 1);
-  });
+  }
 }
 
 function createTranscriptionWithRetry(fileStream, retries = 3) {
@@ -135,10 +141,12 @@ bot.use(async (ctx, next) => {
   const start = new Date()
   await next()
   const ms = new Date() - start
-  console.log(`User: ${ctx.from.username}, Chat: ${ctx.chat.id}: Message processed. Response time: ${ms} ms.`)
+  console.log(`User: ${ctx.from.username}, Chat: ${ctx.chat.id}: message processed. Response time: ${ms/1000} seconds.`)
 })
 
-const helpString = 'Бот GPT Кирилла Маркина - голосовой помощник, который понимает аудиосообщения на русском языке 😊'
+const helpString = `Бот GPT Кирилла Маркина - голосовой помощник, который понимает аудиосообщения на русском языке 😊`
+const errorString = `Произошла ошибка во время обработки сообщения. Скажите Кириллу — пусть починит. Telegram Кирилла: @kirmark`
+
 bot.start((ctx) => {
   ctx.reply(helpString)
 });
@@ -244,8 +252,8 @@ bot.on(message('voice'), async (ctx) => {
     });
     console.log(`User: ${ctx.from.username}, Chat: ${ctx.chat.id}: voice files deleted`);
   } catch (e) {
-    console.error(`User: ${ctx.from.username}, Chat: ${ctx.chat.id}: error occurred: ${e}`, );
-    ctx.reply(`Произошла ошибка во время обработки сообщения. Скажите Кириллу — пусть починит. User: ${ctx.from.username} in chat: ${ctx.chat.id}`);
+    console.error(`[ERROR]: User: ${ctx.from.username}, Chat: ${ctx.chat.id}: error occurred: ${e}`, );
+    ctx.reply(errorString);
   }
 });
 
@@ -289,8 +297,8 @@ bot.on(message('text'), async (ctx) => {
     ctx.reply(answer);
     console.log(`User: ${ctx.from.username}, Chat: ${ctx.chat.id}: answer sent to the user`);
   } catch(e) {
-    console.error(`User: ${ctx.from.username}, Chat: ${ctx.chat.id}: error occurred: ${e}`, );
-    ctx.reply(`Произошла ошибка во время обработки сообщения. Скажите Кириллу — пусть починит. User: ${ctx.from.username} in chat: ${ctx.chat.id}`);
+    console.error(`[ERROR]: User: ${ctx.from.username}, Chat: ${ctx.chat.id}: error occurred: ${e}`, );
+    ctx.reply(errorString);
   }
 });
 bot.launch()
