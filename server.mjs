@@ -96,35 +96,35 @@ const defaultPromptMessageObj = {
 
 async function createChatCompletionWithRetry(messages, retries = 5, timeoutMs = 85000) {
 
-    for(let i = 0; i < retries; i++){
-        try {
-          const chatGPTAnswer = await pTimeout(
-            openai.createChatCompletion({
-              model: "gpt-4",
-              messages: messages,
-              temperature: 0.7,
-            }), 
-            timeoutMs,
-          )
-            .catch((error) => {
-                throw error;
-            });
+  for(let i = 0; i < retries; i++) {
+    try {
+      const chatGPTAnswer = await pTimeout(
+        openai.createChatCompletion({
+          model: "gpt-4",
+          messages: messages,
+          temperature: 0.7,
+        }), 
+        timeoutMs,
+      )
+        .catch((error) => {
+            throw error;
+        });
 
-          if (chatGPTAnswer.status !== 200) {
-              throw new Error(`openai.createChatCompletion failed with status ${chatGPTAnswer.status}`);
-          }
-            
-          return chatGPTAnswer;
-        } catch (error) {
-            if (error instanceof pTimeout.TimeoutError) {
-                console.error(`openai.createChatCompletion timed out. Retries left: ${retries - i - 1}`);
-            } else {
-                console.error(`openai.createChatCompletion failed. Retries left: ${retries - i - 1}`);
-            }
-            
-            if(i === retries - 1) throw error;
-        }
+      if (chatGPTAnswer.status !== 200) {
+          throw new Error(`openai.createChatCompletion failed with status ${chatGPTAnswer.status}`);
+      }
+        
+      return chatGPTAnswer;
+    } catch (error) {
+      if (error instanceof pTimeout.TimeoutError) {
+          console.error(`openai.createChatCompletion timed out. Retries left: ${retries - i - 1}`);
+      } else {
+          console.error(`openai.createChatCompletion failed. Retries left: ${retries - i - 1}`);
+      }
+      
+      if(i === retries - 1) throw error;
     }
+  }
 }
 
 async function createChatCompletionWithRetryAndReduceHistory(messages, retries = 5, timeoutMs = 85000) {
@@ -155,7 +155,7 @@ async function createChatCompletionWithRetryAndReduceHistory(messages, retries =
     const chatGPTAnswer = await createChatCompletionWithRetry(
       messages = [defaultPromptMessageObj, ...messagesCleanned],
       retries,
-      timeoutMs
+      timeoutMs,
     )
     return chatGPTAnswer;
   } catch (error) {
