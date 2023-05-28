@@ -37,44 +37,183 @@ const pool = new Pool({
 
 // Create needed tables if not exists
 
-const createTableQuery = `
+const createTableQueries = [
+  `
   CREATE TABLE IF NOT EXISTS messages (
     id SERIAL PRIMARY KEY,
     role VARCHAR(255) NOT NULL,
     content TEXT NOT NULL,
     chat_id INT NOT NULL
   );
-`;
+  `,
+  `
+  CREATE TABLE IF NOT EXISTS users (
+    id SERIAL PRIMARY KEY,
+    user_id INT UNIQUE NOT NULL,
+    username VARCHAR(255),
+    default_language_code VARCHAR(255),
+    language_code VARCHAR(255),
+    openai_api_key VARCHAR(255)
+  );
+  `,
+  `
+  CREATE TABLE IF NOT EXISTS events (
+    id SERIAL PRIMARY KEY,
+    time TIMESTAMP NOT NULL,
+    type VARCHAR(255) NOT NULL,
 
-pool.query(createTableQuery, (err, res) => {
-  if (err) {
-    console.error('Error executing query', err.stack);
-  } else {
-    console.log('Table messages checked/created successfully');
-  }
-});
+    user_id INT,
+    user_is_bot BOOLEAN,
+    user_language_code VARCHAR(255),
+    user_username VARCHAR(255),
+
+    chat_id INT,
+    chat_type VARCHAR(255),
+
+    message_role VARCHAR(255),
+    messages_type VARCHAR(255),
+    message_voice_duration INT,
+    message_command VARCHAR(255),
+    content_length INT,
+    
+    usage_model VARCHAR(255),
+    usage_object VARCHAR(255),
+    usage_completion_tokens INT,
+    usage_prompt_tokens INT,
+    usage_total_tokens INT
+  );
+  `
+]
+
+// utils
+
+const toLogFormat = (chat_id, username, logMessage) => {
+  return `Chat: ${chat_id}, User: ${username}: ${logMessage}`;
+}
+
+for (const createTableQuery of createTableQueries) {
+  await pool.query(createTableQuery, (err, res) => {
+    if (err) {
+      console.error('Error with checking/creating tables', err.stack);
+      throw err;
+    }
+  });
+}
+console.log('Related tables checked/created successfully');
 
 
 // Database functions
 
-const selectMessagesByChatIdGPTformat = async (chatId) => {
-  const res = await pool.query('SELECT role, content FROM messages WHERE chat_id = $1 ORDER BY id', [chatId]);
+const selectMessagesByChatIdGPTformat = async (ctx) => {
+  const res = await pool.query('SELECT role, content FROM messages WHERE chat_id = $1 ORDER BY id', [ctx.chat.id]);
+  console.log(toLogFormat(ctx.chat.id, ctx.from.username, `messages received from the database: ${res.rows.length}`));
   return res.rows;
 }
 
-const insertMessage = async (role, content, chat_id) => {
-  const res = await pool.query('INSERT INTO messages (role, content, chat_id) VALUES ($1, $2, $3)', [role, content, chat_id]);
-  return res;
+const insertMessage = async ({role, content, chat_id}) => {
+  const res = await pool.query(`
+    INSERT INTO messages (role, content, chat_id)
+    VALUES ($1, $2, $3)
+    RETURNING *;
+  `, [role, content, chat_id]);
+  return res.rows[0];
 }
+
+const insertUser = async ({user_id, username, default_language_code, language_code=default_language_code, openai_api_key=null}) => {
+  try {
+    const res = await pool.query(`
+    INSERT INTO users (user_id, username, default_language_code, language_code, openai_api_key)
+    VALUES ($1, $2, $3, $4, $5)
+    ON CONFLICT (user_id) DO UPDATE SET
+      username = $2,
+      default_language_code = $3,
+      language_code = $4,
+      openai_api_key = $5
+    RETURNING *;
+  `, [user_id, username, default_language_code, language_code, openai_api_key]);
+  return res.rows[0];
+  } catch (error) {
+    throw error;
+  }
+}
+
+const insertEvent = async (event) => {
+  event.time = new Date();
+  try {
+    const res = await pool.query(`
+      INSERT INTO events (
+        time,
+        type,
+  
+        user_id,
+        user_is_bot,
+        user_language_code,
+        user_username,
+  
+        chat_id,
+        chat_type,
+  
+        message_role,
+        messages_type,
+        message_voice_duration,
+        message_command,
+        content_length,
+  
+        usage_model,
+        usage_object,
+        usage_completion_tokens,
+        usage_prompt_tokens,
+        usage_total_tokens
+      )
+      VALUES (
+        $1, $2,
+        $3, $4, $5, $6,
+        $7, $8,
+        $9, $10, $11, $12, $13,
+        $14, $15, $16, $17, $18
+      )
+      RETURNING *;
+    `, [
+      event.time,
+      event.type,
+  
+      event.user_id,
+      event.user_is_bot,
+      event.user_language_code,
+      event.user_username,
+  
+      event.chat_id,
+      event.chat_type,
+  
+      event.message_role,
+      event.messages_type,
+      event.message_voice_duration,
+      event.message_command,
+      event.content_length,
+  
+      event.usage_model,
+      event.usage_object,
+      event.usage_completion_tokens,
+      event.usage_prompt_tokens,
+      event.usage_total_tokens
+    ]);
+    return res.rows[0];
+  } catch (error) {
+    throw error;
+  }
+}
+
 
 const deleteMessagesByChatId = async (chat_id) => {
   const res = await pool.query('DELETE FROM messages WHERE chat_id = $1', [chat_id]);
   return res;
 }
 
+
 // default prompt message to add to the GPT-4 model
-const defaultPromptMessage = (
-`Act as assistant
+
+const defaultPromptMessage = (`
+Act as assistant
 Your name is Donna
 You are female
 You should be friendly
@@ -173,6 +312,46 @@ function createTranscriptionWithRetry(fileStream, retries = 3) {
     });
 }
 
+// Save answer to the database to all tables
+function saveAnswerToDB(chatResponse, ctx) {
+  try {
+    // save the answer to the database
+    const answer = chatResponse.data.choices[0].message.content;
+    insertMessage({
+      role: "assistant",
+      content: answer,
+      chat_id: ctx.chat.id,
+    });
+    insertEvent({
+      type: 'assistant_message',
+
+      user_id: ctx.from.id,
+      user_is_bot: ctx.from.is_bot,
+      user_language_code: ctx.from.language_code,
+      user_username: ctx.from.username,
+
+      chat_id: ctx.chat.id,
+      chat_type: ctx.chat.type,
+
+      message_role: "assistant",
+      messages_type: "text",
+      message_voice_duration: null,
+      message_command: null,
+      content_length: answer.length,
+
+      usage_model: chatResponse.data.model,
+      usage_object: chatResponse.data.object,
+      usage_completion_tokens: chatResponse.data.usage.completion_tokens,
+      usage_prompt_tokens: chatResponse.data.usage.prompt_tokens,
+      usage_total_tokens: chatResponse.data.usage.total_tokens,
+    });
+    console.log(toLogFormat(ctx.chat.id, ctx.from.username, `answer saved to the database`));
+  } catch (error) {
+    throw error;
+  }
+}
+
+
 
 // BOT
 
@@ -182,54 +361,201 @@ const configuration = new Configuration({
 const openai = new OpenAIApi(configuration);
 
 const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN, {handlerTimeout: 12*60*1000});
+const waitAndLog = async (stopSignal, func) => {
+  while (!stopSignal()) {
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    try {
+      func();
+    } catch (error) {
+      console.error(error);
+    }
+  }
+};
 
 bot.use(async (ctx, next) => {
-  const start = new Date()
-  await next()
-  const ms = new Date() - start
-  console.log(`User: ${ctx.from.username}, Chat: ${ctx.chat.id}: message processed. Response time: ${ms/1000} seconds.`)
-})
+  const start = new Date();
 
+  let isNextDone = false;
+  const stopSignal = () => isNextDone;
+
+  // Start waiting and logging in parallel
+  const waitPromise = waitAndLog(stopSignal, () => ctx.telegram.sendChatAction(ctx.chat.id, 'typing'));
+
+  // Wait for next() to complete
+  await next();
+  isNextDone = true;
+
+  // Wait for waitAndLog to finish
+  await waitPromise;
+
+  const ms = new Date() - start;
+  console.log(toLogFormat(ctx.chat.id, ctx.from.username, `message processed. Response time: ${ms / 1000} seconds.`));
+});
 const helpString = `Бот GPT Кирилла Маркина - голосовой помощник, который понимает аудиосообщения на русском языке 😊`
 const errorString = `Произошла ошибка во время обработки сообщения. Скажите Кириллу — пусть починит. Telegram Кирилла: @kirmark`
 
 bot.start((ctx) => {
+  const primaryUsers = process.env.PRIMARY_USERS_LIST.split(',');;
+  let openai_api_key = null;
+  if (
+    primaryUsers
+    && Array.isArray(primaryUsers)
+    && primaryUsers.includes(ctx.from.username)
+  ) {
+    openai_api_key = process.env.OPENAI_API_KEY;
+  }
+  insertUser({
+    user_id: ctx.from.id,
+    username: ctx.from.username,
+    default_language_code: ctx.from.language_code,
+    language_code: ctx.from.language_code,
+    openai_api_key: openai_api_key,
+  });
   ctx.reply(helpString)
 });
+
 bot.help((ctx) => {
   ctx.reply(helpString)
 });
 
 bot.command('reset', (ctx) => {
-  console.log(`User: ${ctx.from.username}, Chat: ${ctx.chat.id}: /reset command received`);
+  console.log(toLogFormat(ctx.chat.id, ctx.from.username, `/reset command received`));
   deleteMessagesByChatId(ctx.chat.id);
-  console.log(`User: ${ctx.from.username}, Chat: ${ctx.chat.id}: messages deleted from database`);
+  console.log(toLogFormat(ctx.chat.id, ctx.from.username, `messages deleted from database`));
   ctx.reply('Старые сообщения удалены из памяти бота в этом чате.')
+  insertEvent({
+    type: 'user_command',
+
+    user_id: ctx.from.id,
+    user_is_bot: ctx.from.is_bot,
+    user_language_code: ctx.from.language_code,
+    user_username: ctx.from.username,
+
+    chat_id: ctx.chat.id,
+    chat_type: ctx.chat.type,
+
+    message_role: "user",
+    messages_type: "text",
+    message_voice_duration: null,
+    message_command: "/reset",
+    content_length: null,
+
+    usage_model: null,
+    usage_object: null,
+    usage_completion_tokens: null,
+    usage_prompt_tokens: null,
+    usage_total_tokens: null,
+  });
 });
 
 
 bot.on(message('photo'), (ctx) => {
-  console.log(`User: ${ctx.from.username}, Chat: ${ctx.chat.id}: photo received`);
+  console.log(toLogFormat(ctx.chat.id, ctx.from.username, `photo received`));
   ctx.reply('Робот пока что не умеет работать с фото и проигнорирует это сообщение.');
+  insertEvent({
+    type: 'user_message',
+
+    user_id: ctx.from.id,
+    user_is_bot: ctx.from.is_bot,
+    user_language_code: ctx.from.language_code,
+    user_username: ctx.from.username,
+
+    chat_id: ctx.chat.id,
+    chat_type: ctx.chat.type,
+
+    message_role: "user",
+    messages_type: "photo",
+    message_voice_duration: null,
+    message_command: null,
+    content_length: null,
+
+    usage_model: null,
+    usage_object: null,
+    usage_completion_tokens: null,
+    usage_prompt_tokens: null,
+    usage_total_tokens: null,
+  });
 });
 bot.on(message('video'), (ctx) => {
-  console.log(`User: ${ctx.from.username}, Chat: ${ctx.chat.id}: video received`);
+  console.log(toLogFormat(ctx.chat.id, ctx.from.username, `video received`));
   ctx.reply('Робот пока что не умеет работать с видео и проигнорирует это сообщение.');
+  insertEvent({
+    type: 'user_message',
+
+    user_id: ctx.from.id,
+    user_is_bot: ctx.from.is_bot,
+    user_language_code: ctx.from.language_code,
+    user_username: ctx.from.username,
+
+    chat_id: ctx.chat.id,
+    chat_type: ctx.chat.type,
+
+    message_role: "user",
+    messages_type: "video",
+    message_voice_duration: null,
+    message_command: null,
+    content_length: null,
+
+    usage_model: null,
+    usage_object: null,
+    usage_completion_tokens: null,
+    usage_prompt_tokens: null,
+    usage_total_tokens: null,
+  });
 });
 bot.on(message('sticker'), (ctx) => {
-  console.log(`User: ${ctx.from.username}, Chat: ${ctx.chat.id}: sticker received`);
-  ctx.reply('👍')
+  console.log(toLogFormat(ctx.chat.id, ctx.from.username, `sticker received`));
+  ctx.reply('👍');
+  insertEvent({
+    type: 'user_message',
+
+    user_id: ctx.from.id,
+    user_is_bot: ctx.from.is_bot,
+    user_language_code: ctx.from.language_code,
+    user_username: ctx.from.username,
+
+    chat_id: ctx.chat.id,
+    chat_type: ctx.chat.type,
+
+    message_role: "user",
+    messages_type: "sticker",
+    message_voice_duration: null,
+    message_command: null,
+    content_length: null,
+
+    usage_model: null,
+    usage_object: null,
+    usage_completion_tokens: null,
+    usage_prompt_tokens: null,
+    usage_total_tokens: null,
+  });
 });
 bot.on(message('voice'), async (ctx) => {
-  console.log(`User: ${ctx.from.username}, Chat: ${ctx.chat.id}: voice received`);
+  console.log(toLogFormat(ctx.chat.id, ctx.from.username, `[NEW] voice received`));
+  insertEvent({
+    type: 'user_message',
 
-  // whait for 1-3 seconds and sendChatAction typing
-  const delay = Math.floor(Math.random() * 3) + 1;
-  setTimeout(() => {
-    ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
-  }
-  , delay * 1000);
+    user_id: ctx.from.id,
+    user_is_bot: ctx.from.is_bot,
+    user_language_code: ctx.from.language_code,
+    user_username: ctx.from.username,
 
+    chat_id: ctx.chat.id,
+    chat_type: ctx.chat.type,
+
+    message_role: "user",
+    messages_type: "voice",
+    message_voice_duration: ctx.message.voice.duration,
+    message_command: null,
+    content_length: null,
+
+    usage_model: null,
+    usage_object: null,
+    usage_completion_tokens: null,
+    usage_prompt_tokens: null,
+    usage_total_tokens: null,
+  });
+  
   try {
     const fileId = ctx.message.voice.file_id;
 
@@ -242,7 +568,7 @@ bot.on(message('voice'), async (ctx) => {
         .on('error', reject)
         .on('finish', resolve);
     });
-    console.log(`User: ${ctx.from.username}, Chat: ${ctx.chat.id}: voice file downloaded`);
+    console.log(toLogFormat(ctx.chat.id, ctx.from.username, `voice file downloaded`));
 
     await new Promise((resolve, reject) => {
       ffmpeg(`./${fileId}.oga`)
@@ -251,16 +577,15 @@ bot.on(message('voice'), async (ctx) => {
         .on('end', resolve)
         .saveToFile(`./${fileId}.mp3`);
     });
-    console.log(`User: ${ctx.from.username}, Chat: ${ctx.chat.id}: voice file converted`);
+    console.log(toLogFormat(ctx.chat.id, ctx.from.username, `voice file converted`));
 
     // send the file to the OpenAI API for transcription
     const transcription = await createTranscriptionWithRetry(fs.createReadStream(`./${fileId}.mp3`));
     const transcriptionText = transcription.data.text;
-    console.log(`User: ${ctx.from.username}, Chat: ${ctx.chat.id}: transcription received.`);
+    console.log(toLogFormat(ctx.chat.id, ctx.from.username, `voice transcription received`));
 
     // download all related messages from the database
-    let messages = await selectMessagesByChatIdGPTformat(ctx.chat.id);
-    console.log(`User: ${ctx.from.username}, Chat: ${ctx.chat.id}: messages received from the database: ${messages.length}`);
+    let messages = await selectMessagesByChatIdGPTformat(ctx);
 
     // Union the user message with messages
     messages = messages.concat({
@@ -269,21 +594,47 @@ bot.on(message('voice'), async (ctx) => {
     });
 
     // save the transcription to the database
-    await insertMessage("user", transcriptionText, ctx.chat.id);
-    console.log(`User: ${ctx.from.username}, Chat: ${ctx.chat.id}: new transcription saved to the database`);
+    insertMessage({
+      role: "user",
+      content: transcriptionText,
+      chat_id: ctx.chat.id,
+    });
+    insertEvent({
+      type: 'model_transcription',
+
+      user_id: ctx.from.id,
+      user_is_bot: ctx.from.is_bot,
+      user_language_code: ctx.from.language_code,
+      user_username: ctx.from.username,
+
+      chat_id: ctx.chat.id,
+      chat_type: ctx.chat.type,
+
+      message_role: null,
+      messages_type: null,
+      message_voice_duration: null,
+      message_command: null,
+      content_length: transcriptionText.length,
+
+      usage_model: "whisper-1",
+      usage_object: null,
+      usage_completion_tokens: null,
+      usage_prompt_tokens: null,
+      usage_total_tokens: null,
+    });
+    console.log(toLogFormat(ctx.chat.id, ctx.from.username, `new voice transcription saved to the database`));
 
     // Send this text to OpenAI's Chat GPT-4 model with retry logic
     const chatResponse = await createChatCompletionWithRetryAndReduceHistory(messages);
-    console.log(`User: ${ctx.from.username}, Chat: ${ctx.chat.id}: chatGPT response received`);
+    console.log(toLogFormat(ctx.chat.id, ctx.from.username, `chatGPT response received`));
 
     // save the answer to the database
-    const answer = chatResponse.data.choices[0].message.content;
-    await insertMessage("assistant", answer, ctx.chat.id);
-    console.log(`User: ${ctx.from.username}, Chat: ${ctx.chat.id}: answer saved to the database`);
+    saveAnswerToDB(chatResponse, ctx);
 
     // send the answer to the user
+    const answer = chatResponse.data.choices[0].message.content;
     ctx.reply(answer);
-    console.log(`User: ${ctx.from.username}, Chat: ${ctx.chat.id}: answer sent to the user`);
+    console.log(toLogFormat(ctx.chat.id, ctx.from.username, `answer sent to the user`));
 
     // Delete both files
     fs.unlink(`./${fileId}.oga`, (err) => {
@@ -296,33 +647,52 @@ bot.on(message('voice'), async (ctx) => {
         console.error(err);
       }
     });
-    console.log(`User: ${ctx.from.username}, Chat: ${ctx.chat.id}: voice files deleted`);
+    console.log(toLogFormat(ctx.chat.id, ctx.from.username, `voice processing finished`));
   } catch (e) {
-    console.error(`[ERROR]: User: ${ctx.from.username}, Chat: ${ctx.chat.id}: error occurred: ${e}`, );
+    console.error(toLogFormat(ctx.chat.id, ctx.from.username, `[ERROR] error occurred: ${e}`));
     ctx.reply(errorString);
   }
 });
 
 bot.on(message('text'), async (ctx) => {
-  console.log(`User: ${ctx.from.username}, Chat: ${ctx.chat.id}: text received.`);
-
-  // whait for 1-3 seconds and sendChatAction typing
-  const delay = Math.floor(Math.random() * 3) + 1;
-  setTimeout(() => {
-    ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
-  }
-  , delay * 1000);
+  console.log(toLogFormat(ctx.chat.id, ctx.from.username, `[NEW] text received`));
 
   try {
     const userText = ctx.message.text;
 
-    // download all related messages from the database
-    let messages = await selectMessagesByChatIdGPTformat(ctx.chat.id);
-    console.log(`User: ${ctx.from.username}, Chat: ${ctx.chat.id}: messages received from the database: ${messages.length}`);
-
     // save the message to the database
-    await insertMessage("user", userText, ctx.chat.id);
-    console.log(`User: ${ctx.from.username}, Chat: ${ctx.chat.id}: new message saved to the database`);
+    insertMessage({
+      role: "user",
+      content: userText,
+      chat_id: ctx.chat.id,
+    });
+    insertEvent({
+      type: 'user_message',
+
+      user_id: ctx.from.id,
+      user_is_bot: ctx.from.is_bot,
+      user_language_code: ctx.from.language_code,
+      user_username: ctx.from.username,
+
+      chat_id: ctx.chat.id,
+      chat_type: ctx.chat.type,
+
+      message_role: "user",
+      messages_type: "text",
+      message_voice_duration: null,
+      message_command: null,
+      content_length: null,
+
+      usage_model: null,
+      usage_object: null,
+      usage_completion_tokens: null,
+      usage_prompt_tokens: null,
+      usage_total_tokens: null,
+    });
+    console.log(toLogFormat(ctx.chat.id, ctx.from.username, `new message saved to the database`));
+
+    // download all related messages from the database
+    let messages = await selectMessagesByChatIdGPTformat(ctx);
 
     // Union the user message with messages
     messages = messages.concat({
@@ -331,19 +701,18 @@ bot.on(message('text'), async (ctx) => {
     });
 
     // Send this text to OpenAI's Chat GPT-4 model with retry logic
-    let response = await createChatCompletionWithRetryAndReduceHistory(messages);
-    console.log(`User: ${ctx.from.username}, Chat: ${ctx.chat.id}: chatGPT response received`);
+    let chatResponse = await createChatCompletionWithRetryAndReduceHistory(messages);
+    console.log(toLogFormat(ctx.chat.id, ctx.from.username, `chatGPT response received`));
   
     // save the answer to the database
-    const answer = response.data.choices[0].message.content;
-    await insertMessage("assistant", answer, ctx.chat.id);
-    console.log(`User: ${ctx.from.username}, Chat: ${ctx.chat.id}: answer saved to the database`);
+    saveAnswerToDB(chatResponse, ctx);
 
     // send the the answer to the user
+    const answer = chatResponse.data.choices[0].message.content;
     ctx.reply(answer);
-    console.log(`User: ${ctx.from.username}, Chat: ${ctx.chat.id}: answer sent to the user`);
+    console.log(toLogFormat(ctx.chat.id, ctx.from.username, `answer sent to the user`));
   } catch(e) {
-    console.error(`[ERROR]: User: ${ctx.from.username}, Chat: ${ctx.chat.id}: error occurred: ${e}`, );
+    console.error(toLogFormat(ctx.chat.id, ctx.from.username, `[ERROR] error occurred: ${e}`));
     ctx.reply(errorString);
   }
 });
