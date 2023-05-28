@@ -244,6 +244,7 @@ bot.on(message('voice'), async (ctx) => {
     console.log(`Voice files deleted`);
   } catch (e) {
     console.error("An error has occurred:", e);
+    ctx.reply("Произошла ошибка во время обработки сообщения. Скажите Кириллу — пусть починит.")
   }
 });
 
@@ -287,7 +288,8 @@ bot.on(message('text'), async (ctx) => {
     ctx.reply(answer);
     console.log(`Answer sent to the user`);
   } catch(e) {
-    console.error("An error has occurred during the chatGPT completion process:", e);
+    console.error("An error has occurred:", e);
+    ctx.reply("Произошла ошибка во время обработки сообщения. Скажите Кириллу — пусть починит.")
   }
 });
 bot.launch()
