@@ -2,23 +2,19 @@ import express from "express";
 import bodyParser from "body-parser";
 import dotenv from "dotenv";
 import fs from "fs";
-import axios from 'axios';
+import axios, { AxiosResponse } from 'axios';
 import pTimeout from 'p-timeout';
 
-// import pkg_t from 'telegraf';
-// const { Telegraf } = pkg_t;
 import { Context, session, Telegraf } from "telegraf";
 import { message, editedMessage, channelPost, editedChannelPost, callbackQuery } from "telegraf/filters";
 
 import ffmpeg from 'fluent-ffmpeg';
-import { Configuration, OpenAIApi, ChatCompletionRequestMessage } from 'openai';
+import { Configuration, OpenAIApi, ChatCompletionRequestMessage, CreateChatCompletionResponse } from 'openai';
 
 interface SessionData {
 	messageCount: number;
-	// ... more session data go here
 }
 
-// Define your own context type
 interface MyContext extends Context {
 	session?: SessionData;
 }
@@ -136,7 +132,9 @@ const createTableQueries = [
 
 // utils
 
-const toLogFormat = (chat_id: number, username: string, logMessage: string) => {
+const toLogFormat = (ctx: MyContext, logMessage: string) => {
+  const chat_id = ctx.chat?.id;
+  const username = ctx.from?.username || ctx.from?.id;
   return `Chat: ${chat_id}, User: ${username}: ${logMessage}`;
 }
 
@@ -163,7 +161,7 @@ class NoOpenAiApiKeyError extends Error {
 const selectMessagesByChatIdGPTformat = async (ctx: MyContext) => {
   if (ctx.chat && ctx.chat.id && ctx.from && ctx.from.username) {
     const res = await pool.query('SELECT role, content FROM messages WHERE chat_id = $1 ORDER BY id', [ctx.chat.id]);
-    console.log(toLogFormat(ctx.chat.id, ctx.from.username, `messages received from the database: ${res.rows.length}`));
+    console.log(toLogFormat(ctx, `messages received from the database: ${res.rows.length}`));
     return res.rows as MyMessage[];
   } else {
     throw new Error('ctx.chat.id or ctx.from.username is undefined');
@@ -327,7 +325,7 @@ async function getUserSettingsAndOpenAi(user_id: number) {
 
 const timeoutMsDefault = 2*60*1000;
 
-async function createChatCompletionWithRetry(messages: Array<MyMessage>, openai: OpenAIApi, retries = 5, timeoutMs = timeoutMsDefault) {
+async function createChatCompletionWithRetry(messages: MyMessage[], openai: OpenAIApi, retries = 5, timeoutMs = timeoutMsDefault) {
   for(let i = 0; i < retries; i++) {
     try {
       const chatGPTAnswer = await pTimeout(
@@ -359,7 +357,7 @@ async function createChatCompletionWithRetry(messages: Array<MyMessage>, openai:
   }
 }
 
-async function createChatCompletionWithRetryAndReduceHistory(messages: MyMessage[], openai: OpenAIApi, retries = 5, timeoutMs = timeoutMsDefault) {
+async function createChatCompletionWithRetryAndReduceHistory(messages: MyMessage[], openai: OpenAIApi, retries = 5, timeoutMs = timeoutMsDefault): Promise<AxiosResponse<CreateChatCompletionResponse, any> | undefined> {
   try {
     // Calculate total length of messages and prompt
     let totalLength = messages.reduce((acc, message) => acc + message.content.length, 0) + defaultPromptMessage.length;
@@ -388,58 +386,66 @@ async function createChatCompletionWithRetryAndReduceHistory(messages: MyMessage
       openai,
       retries,
       timeoutMs,
-    )
-    return chatGPTAnswer;
+    );
+    return chatGPTAnswer as AxiosResponse<CreateChatCompletionResponse, any> | undefined;
   } catch (error) {
     throw error;
   }
 }
 
-function createTranscriptionWithRetry(fileStream, openai, retries = 3) {
+function createTranscriptionWithRetry(fileStream: File, openai: OpenAIApi, retries = 3): Promise<any> {
   return openai.createTranscription(fileStream, "whisper-1")
     .catch((error) => {
       if (retries === 0) {
         throw error;
       }
       console.error(`openai.createTranscription failed. Retries left: ${retries}`);
-      return createTranscriptionWithRetry(fileStream, retries - 1);
+      return createTranscriptionWithRetry(fileStream, openai, retries - 1);
     });
 }
 
 // Save answer to the database to all tables
-async function saveAnswerToDB(chatResponse, ctx) {
+async function saveAnswerToDB(chatResponse: any, ctx: MyContext) {
   try {
     // save the answer to the database
     const answer = chatResponse.data.choices[0].message.content;
-    insertMessage({
-      role: "assistant",
-      content: answer,
-      chat_id: ctx.chat.id,
-    });
-    insertEvent({
-      type: 'assistant_message',
+    if (ctx.chat && ctx.chat.id) {
+      insertMessage({
+        role: "assistant",
+        content: answer,
+        chat_id: ctx.chat.id,
+        });
+    } else {
+      throw new Error(`ctx.chat.id is undefined`);
+    }
+    if (ctx.from && ctx.from.id) {
+      insertEvent({
+        type: 'assistant_message',
 
-      user_id: ctx.from.id,
-      user_is_bot: ctx.from.is_bot,
-      user_language_code: ctx.from.language_code,
-      user_username: ctx.from.username,
+        user_id: ctx.from.id,
+        user_is_bot: ctx.from.is_bot,
+        user_language_code: ctx.from.language_code,
+        user_username: ctx.from.username,
 
-      chat_id: ctx.chat.id,
-      chat_type: ctx.chat.type,
+        chat_id: ctx.chat.id,
+        chat_type: ctx.chat.type,
 
-      message_role: "assistant",
-      messages_type: "text",
-      message_voice_duration: null,
-      message_command: null,
-      content_length: answer.length,
+        message_role: "assistant",
+        messages_type: "text",
+        message_voice_duration: null,
+        message_command: null,
+        content_length: answer.length,
 
-      usage_model: chatResponse.data.model,
-      usage_object: chatResponse.data.object,
-      usage_completion_tokens: chatResponse.data.usage.completion_tokens,
-      usage_prompt_tokens: chatResponse.data.usage.prompt_tokens,
-      usage_total_tokens: chatResponse.data.usage.total_tokens,
-    });
-    console.log(toLogFormat(ctx.chat.id, ctx.from.username, `answer saved to the database`));
+        usage_model: chatResponse.data.model,
+        usage_object: chatResponse.data.object,
+        usage_completion_tokens: chatResponse.data.usage.completion_tokens,
+        usage_prompt_tokens: chatResponse.data.usage.prompt_tokens,
+        usage_total_tokens: chatResponse.data.usage.total_tokens,
+      } as Event);
+      console.log(toLogFormat(ctx, `answer saved to the database`));
+    } else {
+      throw new Error(`ctx.from.id is undefined`);
+    }
   } catch (error) {
     throw error;
   }
@@ -447,30 +453,34 @@ async function saveAnswerToDB(chatResponse, ctx) {
 
 async function saveCommandToDB(ctx: MyContext, command: string) {
   try {
-    insertEvent({
-      type: 'user_command',
+    if (ctx.chat && ctx.chat.id && ctx.from && ctx.from.id) {
+      insertEvent({
+        type: 'user_command',
 
-      user_id: ctx.from.id,
-      user_is_bot: ctx.from.is_bot,
-      user_language_code: ctx.from.language_code,
-      user_username: ctx.from.username,
+        user_id: ctx.from.id,
+        user_is_bot: ctx.from.is_bot,
+        user_language_code: ctx.from.language_code,
+        user_username: ctx.from.username,
 
-      chat_id: ctx.chat.id,
-      chat_type: ctx.chat.type,
+        chat_id: ctx.chat.id,
+        chat_type: ctx.chat.type,
 
-      message_role: "user",
-      messages_type: "text",
-      message_voice_duration: null,
-      message_command: command,
-      content_length: null,
+        message_role: "user",
+        messages_type: "text",
+        message_voice_duration: null,
+        message_command: command,
+        content_length: null,
 
-      usage_model: null,
-      usage_object: null,
-      usage_completion_tokens: null,
-      usage_prompt_tokens: null,
-      usage_total_tokens: null,
-    });
-    console.log(toLogFormat(ctx.chat.id, ctx.from.username, `command saved to the database`));
+        usage_model: null,
+        usage_object: null,
+        usage_completion_tokens: null,
+        usage_prompt_tokens: null,
+        usage_total_tokens: null,
+      } as Event);
+      console.log(toLogFormat(ctx, `command saved to the database`));
+    } else {
+      throw new Error(`ctx.chat.id is undefined`);
+    }
   } catch (error) {
     throw error;
   }
@@ -481,7 +491,8 @@ async function saveCommandToDB(ctx: MyContext, command: string) {
 // BOT
 
 const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN, {handlerTimeout: 12*60*1000});
-const waitAndLog = async (stopSignal, func) => {
+
+const waitAndLog = async (stopSignal: any, func: any) => {
   while (!stopSignal()) {
     await new Promise(resolve => setTimeout(resolve, 2000));
     try {
@@ -499,7 +510,17 @@ bot.use(async (ctx: MyContext, next) => {
   const stopSignal = () => isNextDone;
 
   // Start waiting and logging in parallel
-  const waitPromise = waitAndLog(stopSignal, () => ctx.telegram.sendChatAction(ctx.chat.id, 'typing'));
+  let sendChatActionTyping = () => {};
+  let chatId: number = -1;
+  if (ctx.chat && ctx.chat.id) {
+    chatId = ctx.chat.id;
+  } else {
+    throw new Error(`ctx.chat.id is undefined`);
+  }
+  if (chatId !== -1) {
+    sendChatActionTyping = () => ctx.telegram.sendChatAction(chatId, 'typing');
+  }
+  const waitPromise = waitAndLog(stopSignal, sendChatActionTyping);
 
   // Wait for next() to complete
   await next();
@@ -508,19 +529,23 @@ bot.use(async (ctx: MyContext, next) => {
   // Wait for waitAndLog to finish
   await waitPromise;
 
-  const ms = new Date() - start;
-  console.log(toLogFormat(ctx.chat.id, ctx.from.username, `message processed. Response time: ${ms / 1000} seconds.`));
+  const ms = new Date().getTime() - start.getTime() ;
+  console.log(toLogFormat(ctx, `message processed. Response time: ${ms / 1000} seconds.`));
 });
 const helpString = `Бот GPT Кирилла Маркина - голосовой помощник, который понимает аудиосообщения на русском языке 😊`
 const errorString = `Произошла ошибка во время обработки сообщения. Скажите Кириллу — пусть починит. Telegram Кирилла: @kirmark`
 
 bot.start((ctx: MyContext) => {
-  insertUser({
-    user_id: ctx.from.id,
-    username: ctx.from.username,
-    default_language_code: ctx.from.language_code,
-    language_code: ctx.from.language_code,
-  });
+  if (ctx.from && ctx.from.id) {
+    insertUser({
+      user_id: ctx.from.id,
+      username: ctx.from.username,
+      default_language_code: ctx.from.language_code,
+      language_code: ctx.from.language_code,
+    } as User);
+  } else {
+    throw new Error(`ctx.from.id is undefined`);
+  }
   ctx.reply(helpString)
 });
 
@@ -529,9 +554,13 @@ bot.help((ctx: MyContext) => {
 });
 
 bot.command('reset', (ctx: MyContext) => {
-  console.log(toLogFormat(ctx.chat.id, ctx.from.username, `/reset command received`));
-  deleteMessagesByChatId(ctx.chat.id);
-  console.log(toLogFormat(ctx.chat.id, ctx.from.username, `messages deleted from database`));
+  console.log(toLogFormat(ctx, `/reset command received`));
+  if (ctx.chat && ctx.chat.id) {
+    deleteMessagesByChatId(ctx.chat.id);
+  } else {
+    throw new Error(`ctx.chat.id is undefined`);
+  }
+  console.log(toLogFormat(ctx, `messages deleted from database`));
   ctx.reply('Старые сообщения удалены из памяти бота в этом чате.')
   saveCommandToDB(ctx, 'reset');
 });
@@ -539,128 +568,149 @@ bot.command('reset', (ctx: MyContext) => {
 bot.command('settings', (ctx: MyContext) => {
   ctx.state.command = { raw: '/settings' };
   console.log(ctx)
-  console.log(toLogFormat(ctx.chat.id, ctx.from.username, `/settings command received`));
+  console.log(toLogFormat(ctx, `/settings command received`));
   
-  ctx.reply("Enter your openAI API key");
-  const openAIKey = ctx.message?.text;
-
-  insertUser({
-    user_id: ctx.from.id,
-    username: ctx.from.username,
-    default_language_code: ctx.from.language_code,
-    openai_key: openAIKey,
-  })
+  // TODO: update user settings and openAIKey
+  // if (ctx.from && ctx.from.id) {
+  //   insertUser({
+  //     user_id: ctx.from.id,
+  //     username: ctx.from.username,
+  //     default_language_code: ctx.from.language_code,
+  //     openai_key: openAIKey,
+  //   })
+  // } else {
+  //   throw new Error(`ctx.from.id is undefined`);
+  // }
   
   saveCommandToDB(ctx, 'settings');
 });
 
 
 bot.on(message('photo'), (ctx: MyContext) => {
-  console.log(toLogFormat(ctx.chat.id, ctx.from.username, `photo received`));
+  console.log(toLogFormat(ctx, `photo received`));
   ctx.reply('Робот пока что не умеет работать с фото и проигнорирует это сообщение.');
-  insertEvent({
-    type: 'user_message',
+  if (ctx.from && ctx.from.id && ctx.chat && ctx.chat.id) {
+    insertEvent({
+      type: 'user_message',
 
-    user_id: ctx.from.id,
-    user_is_bot: ctx.from.is_bot,
-    user_language_code: ctx.from.language_code,
-    user_username: ctx.from.username,
+      user_id: ctx.from.id,
+      user_is_bot: ctx.from.is_bot,
+      user_language_code: ctx.from.language_code,
+      user_username: ctx.from.username,
 
-    chat_id: ctx.chat.id,
-    chat_type: ctx.chat.type,
+      chat_id: ctx.chat.id,
+      chat_type: ctx.chat.type,
 
-    message_role: "user",
-    messages_type: "photo",
-    message_voice_duration: null,
-    message_command: null,
-    content_length: null,
+      message_role: "user",
+      messages_type: "photo",
+      message_voice_duration: null,
+      message_command: null,
+      content_length: null,
 
-    usage_model: null,
-    usage_object: null,
-    usage_completion_tokens: null,
-    usage_prompt_tokens: null,
-    usage_total_tokens: null,
-  });
+      usage_model: null,
+      usage_object: null,
+      usage_completion_tokens: null,
+      usage_prompt_tokens: null,
+      usage_total_tokens: null,
+    } as Event);
+  } else {
+    throw new Error(`ctx.from.id or ctx.chat.id is undefined`);
+  }
 });
 bot.on(message('video'), (ctx: MyContext) => {
-  console.log(toLogFormat(ctx.chat.id, ctx.from.username, `video received`));
+  console.log(toLogFormat(ctx, `video received`));
   ctx.reply('Робот пока что не умеет работать с видео и проигнорирует это сообщение.');
-  insertEvent({
-    type: 'user_message',
+  if (ctx.from && ctx.from.id && ctx.chat && ctx.chat.id) {
+    insertEvent({
+      type: 'user_message',
 
-    user_id: ctx.from.id,
-    user_is_bot: ctx.from.is_bot,
-    user_language_code: ctx.from.language_code,
-    user_username: ctx.from.username,
+      user_id: ctx.from.id,
+      user_is_bot: ctx.from.is_bot,
+      user_language_code: ctx.from.language_code,
+      user_username: ctx.from.username,
 
-    chat_id: ctx.chat.id,
-    chat_type: ctx.chat.type,
+      chat_id: ctx.chat.id,
+      chat_type: ctx.chat.type,
 
-    message_role: "user",
-    messages_type: "video",
-    message_voice_duration: null,
-    message_command: null,
-    content_length: null,
+      message_role: "user",
+      messages_type: "video",
+      message_voice_duration: null,
+      message_command: null,
+      content_length: null,
 
-    usage_model: null,
-    usage_object: null,
-    usage_completion_tokens: null,
-    usage_prompt_tokens: null,
-    usage_total_tokens: null,
-  });
+      usage_model: null,
+      usage_object: null,
+      usage_completion_tokens: null,
+      usage_prompt_tokens: null,
+      usage_total_tokens: null,
+    } as Event);
+  } else {
+    throw new Error(`ctx.from.id or ctx.chat.id is undefined`);
+  }
 });
 bot.on(message('sticker'), (ctx: MyContext) => {
-  console.log(toLogFormat(ctx.chat.id, ctx.from.username, `sticker received`));
+  console.log(toLogFormat(ctx, `sticker received`));
   ctx.reply('👍');
-  insertEvent({
-    type: 'user_message',
+  if (ctx.from && ctx.from.id && ctx.chat && ctx.chat.id) {
+    insertEvent({
+      type: 'user_message',
 
-    user_id: ctx.from.id,
-    user_is_bot: ctx.from.is_bot,
-    user_language_code: ctx.from.language_code,
-    user_username: ctx.from.username,
+      user_id: ctx.from.id,
+      user_is_bot: ctx.from.is_bot,
+      user_language_code: ctx.from.language_code,
+      user_username: ctx.from.username,
 
-    chat_id: ctx.chat.id,
-    chat_type: ctx.chat.type,
+      chat_id: ctx.chat.id,
+      chat_type: ctx.chat.type,
 
-    message_role: "user",
-    messages_type: "sticker",
-    message_voice_duration: null,
-    message_command: null,
-    content_length: null,
+      message_role: "user",
+      messages_type: "sticker",
+      message_voice_duration: null,
+      message_command: null,
+      content_length: null,
 
-    usage_model: null,
-    usage_object: null,
-    usage_completion_tokens: null,
-    usage_prompt_tokens: null,
-    usage_total_tokens: null,
-  });
+      usage_model: null,
+      usage_object: null,
+      usage_completion_tokens: null,
+      usage_prompt_tokens: null,
+      usage_total_tokens: null,
+    } as Event);
+  } else {
+    throw new Error(`ctx.from.id or ctx.chat.id is undefined`);
+  }
 });
 bot.on(message('voice'), async (ctx: MyContext) => {
-  console.log(toLogFormat(ctx.chat.id, ctx.from.username, `[NEW] voice received`));
-  insertEvent({
-    type: 'user_message',
+  console.log(toLogFormat(ctx, `[NEW] voice received`));
+  if (
+    ctx.from && ctx.from.id && ctx.chat && ctx.chat.id && ctx.message 
+    && ctx.message.voice && ctx.message.voice.duration
+  ) {
+    insertEvent({
+      type: 'user_message',
 
-    user_id: ctx.from.id,
-    user_is_bot: ctx.from.is_bot,
-    user_language_code: ctx.from.language_code,
-    user_username: ctx.from.username,
+      user_id: ctx.from.id,
+      user_is_bot: ctx.from.is_bot,
+      user_language_code: ctx.from.language_code,
+      user_username: ctx.from.username,
 
-    chat_id: ctx.chat.id,
-    chat_type: ctx.chat.type,
+      chat_id: ctx.chat.id,
+      chat_type: ctx.chat.type,
 
-    message_role: "user",
-    messages_type: "voice",
-    message_voice_duration: ctx.message.voice.duration,
-    message_command: null,
-    content_length: null,
+      message_role: "user",
+      messages_type: "voice",
+      message_voice_duration: ctx.message.voice.duration,
+      message_command: null,
+      content_length: null,
 
-    usage_model: null,
-    usage_object: null,
-    usage_completion_tokens: null,
-    usage_prompt_tokens: null,
-    usage_total_tokens: null,
-  });
+      usage_model: null,
+      usage_object: null,
+      usage_completion_tokens: null,
+      usage_prompt_tokens: null,
+      usage_total_tokens: null,
+    } as Event);
+  } else {
+    throw new Error(`ctx.from.id or ctx.chat.id is undefined`);
+  }
   
   try {
     let userData = null;
@@ -678,14 +728,14 @@ bot.on(message('voice'), async (ctx: MyContext) => {
 
     // download the file
     const url = await ctx.telegram.getFileLink(fileId);
-    const response = await axios({url, responseType: 'stream'});
+    const response = await axios({ url: url.toString(), responseType: 'stream' });
 
     await new Promise((resolve, reject) => {
       response.data.pipe(fs.createWriteStream(`./${fileId}.oga`))
         .on('error', reject)
         .on('finish', resolve);
     });
-    console.log(toLogFormat(ctx.chat.id, ctx.from.username, `voice file downloaded`));
+    console.log(toLogFormat(ctx, `voice file downloaded`));
 
     await new Promise((resolve, reject) => {
       ffmpeg(`./${fileId}.oga`)
@@ -694,12 +744,12 @@ bot.on(message('voice'), async (ctx: MyContext) => {
         .on('end', resolve)
         .saveToFile(`./${fileId}.mp3`);
     });
-    console.log(toLogFormat(ctx.chat.id, ctx.from.username, `voice file converted`));
+    console.log(toLogFormat(ctx, `voice file converted`));
 
     // send the file to the OpenAI API for transcription
-    const transcription = await createTranscriptionWithRetry(fs.createReadStream(`./${fileId}.mp3`));
+    const transcription = await createTranscriptionWithRetry(fs.createReadStream(`./${fileId}.mp3`), userData.openai);
     const transcriptionText = transcription.data.text;
-    console.log(toLogFormat(ctx.chat.id, ctx.from.username, `voice transcription received`));
+    console.log(toLogFormat(ctx, `voice transcription received`));
 
     // download all related messages from the database
     let messages = await selectMessagesByChatIdGPTformat(ctx);
@@ -707,8 +757,8 @@ bot.on(message('voice'), async (ctx: MyContext) => {
     // Union the user message with messages
     messages = messages.concat({
       role: "user",
-      content: transcriptionText,
-    });
+      content: transcriptionText as string,
+    } as MyMessage);
 
     // save the transcription to the database
     insertMessage({
@@ -738,20 +788,30 @@ bot.on(message('voice'), async (ctx: MyContext) => {
       usage_completion_tokens: null,
       usage_prompt_tokens: null,
       usage_total_tokens: null,
-    });
-    console.log(toLogFormat(ctx.chat.id, ctx.from.username, `new voice transcription saved to the database`));
+    } as Event);
+    console.log(toLogFormat(ctx, `new voice transcription saved to the database`));
 
     // Send this text to OpenAI's Chat GPT-4 model with retry logic
-    const chatResponse = await createChatCompletionWithRetryAndReduceHistory(messages: Array<MyMessage>, userData.openai);
-    console.log(toLogFormat(ctx.chat.id, ctx.from.username, `chatGPT response received`));
+    const chatResponse = await createChatCompletionWithRetryAndReduceHistory(messages, userData.openai);
+    console.log(toLogFormat(ctx, `chatGPT response received`));
 
     // save the answer to the database
     saveAnswerToDB(chatResponse, ctx);
 
     // send the answer to the user
-    const answer = chatResponse.data.choices[0].message.content;
+    let answer = 'Я не знаю, что ответить';
+    if (
+      chatResponse
+      && chatResponse.data
+      && chatResponse.data.choices
+      && chatResponse.data.choices[0]
+      && chatResponse.data.choices[0].message
+    ) {
+      answer = chatResponse.data.choices[0].message.content;
+    }
+    
     ctx.reply(answer);
-    console.log(toLogFormat(ctx.chat.id, ctx.from.username, `answer sent to the user`));
+    console.log(toLogFormat(ctx, `answer sent to the user`));
 
     // Delete both files
     fs.unlink(`./${fileId}.oga`, (err) => {
@@ -764,20 +824,24 @@ bot.on(message('voice'), async (ctx: MyContext) => {
         console.error(err);
       }
     });
-    console.log(toLogFormat(ctx.chat.id, ctx.from.username, `voice processing finished`));
+    console.log(toLogFormat(ctx, `voice processing finished`));
   } catch (e) {
-    console.error(toLogFormat(ctx.chat.id, ctx.from.username, `[ERROR] error occurred: ${e}`));
+    console.error(toLogFormat(ctx, `[ERROR] error occurred: ${e}`));
     ctx.reply(errorString);
   }
 });
 
 bot.on(message('text'), async (ctx: MyContext) => {
-  console.log(toLogFormat(ctx.chat.id, ctx.from.username, `[NEW] text received`));
+  console.log(toLogFormat(ctx, `[NEW] text received`));
 
   try {
     let userData = null;
     try {
-      userData = await getUserSettingsAndOpenAi(ctx.from.id);
+      if (ctx.from && ctx.from.id) {
+        userData = await getUserSettingsAndOpenAi(ctx.from.id);
+      } else {
+        throw new Error(`ctx.from.id is undefined`);
+      }
     } catch (e) {
       if (e instanceof NoOpenAiApiKeyError) {
         ctx.reply('У вас не настроен OpenAI API ключ. Напишите /settings чтобы настроить его.');
@@ -786,38 +850,47 @@ bot.on(message('text'), async (ctx: MyContext) => {
         throw e;
       }
     }
-    const userText = ctx.message.text;
+    let userText = null;
+    if (ctx.message && ctx.message.text) {
+      userText = ctx.message.text;
+    } else {
+      throw new Error(`ctx.message.text is undefined`);
+    }
 
     // save the message to the database
-    insertMessage({
-      role: "user",
-      content: userText,
-      chat_id: ctx.chat.id,
-    });
-    insertEvent({
-      type: 'user_message',
+    if (ctx.chat && ctx.chat.id && ctx.from && ctx.from.id) {
+      insertMessage({
+        role: "user",
+        content: userText,
+        chat_id: ctx.chat.id,
+      });
+      insertEvent({
+        type: 'user_message',
 
-      user_id: ctx.from.id,
-      user_is_bot: ctx.from.is_bot,
-      user_language_code: ctx.from.language_code,
-      user_username: ctx.from.username,
+        user_id: ctx.from.id,
+        user_is_bot: ctx.from.is_bot,
+        user_language_code: ctx.from.language_code,
+        user_username: ctx.from.username,
 
-      chat_id: ctx.chat.id,
-      chat_type: ctx.chat.type,
+        chat_id: ctx.chat.id,
+        chat_type: ctx.chat.type,
 
-      message_role: "user",
-      messages_type: "text",
-      message_voice_duration: null,
-      message_command: null,
-      content_length: null,
+        message_role: "user",
+        messages_type: "text",
+        message_voice_duration: null,
+        message_command: null,
+        content_length: null,
 
-      usage_model: null,
-      usage_object: null,
-      usage_completion_tokens: null,
-      usage_prompt_tokens: null,
-      usage_total_tokens: null,
-    });
-    console.log(toLogFormat(ctx.chat.id, ctx.from.username, `new message saved to the database`));
+        usage_model: null,
+        usage_object: null,
+        usage_completion_tokens: null,
+        usage_prompt_tokens: null,
+        usage_total_tokens: null,
+      } as Event);
+      console.log(toLogFormat(ctx, `new message saved to the database`));
+    } else {
+      throw new Error(`ctx.chat.id or ctx.from.id is undefined`);
+    }
 
     // download all related messages from the database
     let messages = await selectMessagesByChatIdGPTformat(ctx);
@@ -826,24 +899,34 @@ bot.on(message('text'), async (ctx: MyContext) => {
     messages = messages.concat({
       role: "user",
       content: userText,
-    });
+    } as MyMessage);
 
     // Send this text to OpenAI's Chat GPT-4 model with retry logic
     let chatResponse = await createChatCompletionWithRetryAndReduceHistory(
-      messages: Array<MyMessage>, 
+      messages, 
       userData.openai,
     );
-    console.log(toLogFormat(ctx.chat.id, ctx.from.username, `chatGPT response received`));
+    console.log(toLogFormat(ctx, `chatGPT response received`));
   
     // save the answer to the database
     saveAnswerToDB(chatResponse, ctx);
 
-    // send the the answer to the user
-    const answer = chatResponse.data.choices[0].message.content;
+    // send the answer to the user
+    let answer = 'Я не знаю, что ответить';
+    if (
+      chatResponse
+      && chatResponse.data
+      && chatResponse.data.choices
+      && chatResponse.data.choices[0]
+      && chatResponse.data.choices[0].message
+    ) {
+      answer = chatResponse.data.choices[0].message.content;
+    }
+    
     ctx.reply(answer);
-    console.log(toLogFormat(ctx.chat.id, ctx.from.username, `answer sent to the user`));
+    console.log(toLogFormat(ctx, `answer sent to the user`));
   } catch(e) {
-    console.error(toLogFormat(ctx.chat.id, ctx.from.username, `[ERROR] error occurred: ${e}`));
+    console.error(toLogFormat(ctx, `[ERROR] error occurred: ${e}`));
     ctx.reply(errorString);
   }
 });
