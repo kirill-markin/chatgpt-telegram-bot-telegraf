@@ -93,9 +93,9 @@ const defaultPromptMessageObj = {
 
 // OpenAI functions
 
+const timeoutMsDefault = 70000;
 
-async function createChatCompletionWithRetry(messages, retries = 5, timeoutMs = 85000) {
-
+async function createChatCompletionWithRetry(messages, retries = 5, timeoutMs = timeoutMsDefault) {
   for(let i = 0; i < retries; i++) {
     try {
       const chatGPTAnswer = await pTimeout(
@@ -127,8 +127,7 @@ async function createChatCompletionWithRetry(messages, retries = 5, timeoutMs = 
   }
 }
 
-async function createChatCompletionWithRetryAndReduceHistory(messages, retries = 5, timeoutMs = 85000) {
-
+async function createChatCompletionWithRetryAndReduceHistory(messages, retries = 5, timeoutMs = timeoutMsDefault) {
   try {
     // Calculate total length of messages and prompt
     let totalLength = messages.reduce((acc, message) => acc + message.content.length, 0) + defaultPromptMessage.length;
