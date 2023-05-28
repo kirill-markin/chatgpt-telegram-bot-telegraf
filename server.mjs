@@ -135,7 +135,7 @@ bot.use(async (ctx, next) => {
   const start = new Date()
   await next()
   const ms = new Date() - start
-  console.log(`New message from user ${ctx.from.username}. Response time: ${ms} ms.`)
+  console.log(`User: ${ctx.from.username}, Chat: ${ctx.chat.id}: Message processed. Response time: ${ms} ms.`)
 })
 
 const helpString = 'Бот GPT Кирилла Маркина - голосовой помощник, который понимает аудиосообщения на русском языке 😊'
@@ -147,26 +147,27 @@ bot.help((ctx) => {
 });
 
 bot.command('reset', (ctx) => {
-  console.log('/reset command received');
+  console.log(`User: ${ctx.from.username}, Chat: ${ctx.chat.id}: /reset command received`);
   deleteMessagesByChatId(ctx.chat.id);
+  console.log(`User: ${ctx.from.username}, Chat: ${ctx.chat.id}: messages deleted from database`);
   ctx.reply('Старые сообщения удалены из памяти бота в этом чате.')
 });
 
 
 bot.on(message('photo'), (ctx) => {
-  console.log('photo received');
+  console.log(`User: ${ctx.from.username}, Chat: ${ctx.chat.id}: photo received`);
   ctx.reply('Робот пока что не умеет работать с фото и проигнорирует это сообщение.');
 });
 bot.on(message('video'), (ctx) => {
-  console.log('video received');
+  console.log(`User: ${ctx.from.username}, Chat: ${ctx.chat.id}: video received`);
   ctx.reply('Робот пока что не умеет работать с видео и проигнорирует это сообщение.');
 });
 bot.on(message('sticker'), (ctx) => {
-  console.log('sticker received');
+  console.log(`User: ${ctx.from.username}, Chat: ${ctx.chat.id}: sticker received`);
   ctx.reply('👍')
 });
 bot.on(message('voice'), async (ctx) => {
-  console.log('Voice received from user: ', ctx.from.username);
+  console.log(`User: ${ctx.from.username}, Chat: ${ctx.chat.id}: voice received`);
 
   // whait for 1-3 seconds and sendChatAction typing
   const delay = Math.floor(Math.random() * 3) + 1;
@@ -187,7 +188,7 @@ bot.on(message('voice'), async (ctx) => {
         .on('error', reject)
         .on('finish', resolve);
     });
-    console.log('Voice file downloaded');
+    console.log(`User: ${ctx.from.username}, Chat: ${ctx.chat.id}: voice file downloaded`);
 
     await new Promise((resolve, reject) => {
       ffmpeg(`./${fileId}.oga`)
@@ -196,16 +197,16 @@ bot.on(message('voice'), async (ctx) => {
         .on('end', resolve)
         .saveToFile(`./${fileId}.mp3`);
     });
-    console.log('Voice file converted');
+    console.log(`User: ${ctx.from.username}, Chat: ${ctx.chat.id}: voice file converted`);
 
     // send the file to the OpenAI API for transcription
     const transcription = await createTranscriptionWithRetry(fs.createReadStream(`./${fileId}.mp3`));
     const transcriptionText = transcription.data.text;
-    console.log(`Transcription received: ${transcriptionText}`);
+    console.log(`User: ${ctx.from.username}, Chat: ${ctx.chat.id}: transcription received: ${transcriptionText}`);
 
     // download all related messages from the database
     let messages = await selectMessagesByChatIdGPTformat(ctx.chat.id);
-    console.log(`Messages received from the database: ${messages.length}`);
+    console.log(`User: ${ctx.from.username}, Chat: ${ctx.chat.id}: messages received from the database`);
 
     // Union the user message with messages
     messages = messages.concat({
@@ -215,20 +216,20 @@ bot.on(message('voice'), async (ctx) => {
 
     // save the transcription to the database
     await insertMessage("user", transcriptionText, ctx.chat.id);
-    console.log(`New transcription saved to the database`);
+    console.log(`User: ${ctx.from.username}, Chat: ${ctx.chat.id}: new transcription saved to the database`);
 
     // Send this text to OpenAI's Chat GPT-4 model with retry logic
     const chatResponse = await createChatCompletionWithRetry(messages);
-    console.log(`chatGPT response received`);
+    console.log(`User: ${ctx.from.username}, Chat: ${ctx.chat.id}: chatGPT response received`);
 
     // save the answer to the database
     const answer = chatResponse.data.choices[0].message.content;
     await insertMessage("assistant", answer, ctx.chat.id);
-    console.log(`Answer saved to the database`);
+    console.log(`User: ${ctx.from.username}, Chat: ${ctx.chat.id}: answer saved to the database`);
 
     // send the answer to the user
     ctx.reply(answer);
-    console.log(`Answer sent to the user`);
+    console.log(`User: ${ctx.from.username}, Chat: ${ctx.chat.id}: answer sent to the user`);
 
     // Delete both files
     fs.unlink(`./${fileId}.oga`, (err) => {
@@ -241,15 +242,15 @@ bot.on(message('voice'), async (ctx) => {
         console.error(err);
       }
     });
-    console.log(`Voice files deleted`);
+    console.log(`User: ${ctx.from.username}, Chat: ${ctx.chat.id}: voice files deleted`);
   } catch (e) {
-    console.error("An error has occurred:", e);
-    ctx.reply("Произошла ошибка во время обработки сообщения. Скажите Кириллу — пусть починит.")
+    console.error(`User: ${ctx.from.username}, Chat: ${ctx.chat.id}: error occurred: ${e}`, );
+    ctx.reply(`Произошла ошибка во время обработки сообщения. Скажите Кириллу — пусть починит. User: ${ctx.from.username} in chat: ${ctx.chat.id}`);
   }
 });
 
 bot.on(message('text'), async (ctx) => {
-  console.log('Text received from user: ', ctx.from.username);
+  console.log(`User: ${ctx.from.username}, Chat: ${ctx.chat.id}: text received`);
 
   // whait for 1-3 seconds and sendChatAction typing
   const delay = Math.floor(Math.random() * 3) + 1;
@@ -263,11 +264,11 @@ bot.on(message('text'), async (ctx) => {
 
     // download all related messages from the database
     let messages = await selectMessagesByChatIdGPTformat(ctx.chat.id);
-    console.log(`Messages received from the database: ${messages.length}`);
+    console.log(`User: ${ctx.from.username}, Chat: ${ctx.chat.id}: messages received from the database`);
 
     // save the message to the database
     await insertMessage("user", userText, ctx.chat.id);
-    console.log(`New message saved to the database`);
+    console.log(`User: ${ctx.from.username}, Chat: ${ctx.chat.id}: new message saved to the database`);
 
     // Union the user message with messages
     messages = messages.concat({
@@ -277,19 +278,19 @@ bot.on(message('text'), async (ctx) => {
 
     // Send this text to OpenAI's Chat GPT-4 model with retry logic
     let response = await createChatCompletionWithRetry(messages);
-    console.log(`chatGPT response received`);
+    console.log(`User: ${ctx.from.username}, Chat: ${ctx.chat.id}: chatGPT response received`);
   
     // save the answer to the database
     const answer = response.data.choices[0].message.content;
     await insertMessage("assistant", answer, ctx.chat.id);
-    console.log(`Answer saved to the database`);
+    console.log(`User: ${ctx.from.username}, Chat: ${ctx.chat.id}: answer saved to the database`);
 
     // send the the answer to the user
     ctx.reply(answer);
-    console.log(`Answer sent to the user`);
+    console.log(`User: ${ctx.from.username}, Chat: ${ctx.chat.id}: answer sent to the user`);
   } catch(e) {
-    console.error("An error has occurred:", e);
-    ctx.reply("Произошла ошибка во время обработки сообщения. Скажите Кириллу — пусть починит.")
+    console.error(`User: ${ctx.from.username}, Chat: ${ctx.chat.id}: error occurred: ${e}`, );
+    ctx.reply(`Произошла ошибка во время обработки сообщения. Скажите Кириллу — пусть починит. User: ${ctx.from.username} in chat: ${ctx.chat.id}`);
   }
 });
 bot.launch()
