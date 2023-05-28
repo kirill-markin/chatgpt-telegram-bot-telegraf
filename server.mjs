@@ -244,10 +244,18 @@ const defaultPromptMessageObj = {
 
 // OpenAI functions
 
-async function getUserSettingsAndOpenAi(user_id) {
-  const userSettings = await selectUserByUserId(user_id);
+async function getUserSettingsAndOpenAiOrCreate(ctx) {
+  const user_id = ctx.from.id;
+  let userSettings = await selectUserByUserId(user_id);
   if (!userSettings) {
-    throw new Error(`User with user_id ${user_id} not found`);
+    userSettings = {
+      user_id: user_id,
+      username: ctx.from.username,
+      default_language_code: ctx.from.language_code,
+      language_code: ctx.from.language_code,
+    }
+    insertUser(userSettings);
+    console.log(toLogFormat(ctx.chat.id, ctx.from.username, `user created in the database`));
   }
 
   const primaryUsers = process.env.PRIMARY_USERS_LIST.split(',');
@@ -338,14 +346,14 @@ async function createChatCompletionWithRetryAndReduceHistory(messages, openai, r
   }
 }
 
-function createTranscriptionWithRetry(fileStream, retries = 3) {
+function createTranscriptionWithRetry(fileStream, openai, retries = 3) {
   return openai.createTranscription(fileStream, "whisper-1")
     .catch((error) => {
       if (retries === 0) {
         throw error;
       }
       console.error(`openai.createTranscription failed. Retries left: ${retries}`);
-      return createTranscriptionWithRetry(fileStream, retries - 1);
+      return createTranscriptionWithRetry(fileStream, openai, retries - 1);
     });
 }
 
@@ -581,7 +589,7 @@ bot.on(message('voice'), async (ctx) => {
   try {
     let userData = null;
     try {
-      userData = await getUserSettingsAndOpenAi(ctx.from.id);
+      userData = await getUserSettingsAndOpenAiOrCreate(ctx);
     } catch (e) {
       if (e instanceof NoOpenAiApiKeyError) {
         ctx.reply('У вас не настроен OpenAI API ключ. Напишите /settings чтобы настроить его.');
@@ -613,7 +621,7 @@ bot.on(message('voice'), async (ctx) => {
     console.log(toLogFormat(ctx.chat.id, ctx.from.username, `voice file converted`));
 
     // send the file to the OpenAI API for transcription
-    const transcription = await createTranscriptionWithRetry(fs.createReadStream(`./${fileId}.mp3`));
+    const transcription = await createTranscriptionWithRetry(fs.createReadStream(`./${fileId}.mp3`), userData.openai);
     const transcriptionText = transcription.data.text;
     console.log(toLogFormat(ctx.chat.id, ctx.from.username, `voice transcription received`));
 
@@ -693,7 +701,7 @@ bot.on(message('text'), async (ctx) => {
   try {
     let userData = null;
     try {
-      userData = await getUserSettingsAndOpenAi(ctx.from.id);
+      userData = await getUserSettingsAndOpenAiOrCreate(ctx);
     } catch (e) {
       if (e instanceof NoOpenAiApiKeyError) {
         ctx.reply('У вас не настроен OpenAI API ключ. Напишите /settings чтобы настроить его.');
