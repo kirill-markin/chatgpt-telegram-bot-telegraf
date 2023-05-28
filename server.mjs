@@ -214,7 +214,7 @@ bot.on(message('voice'), async (ctx) => {
 
     // download all related messages from the database
     let messages = await selectMessagesByChatIdGPTformat(ctx.chat.id);
-    console.log(`User: ${ctx.from.username}, Chat: ${ctx.chat.id}: messages received from the database`);
+    console.log(`User: ${ctx.from.username}, Chat: ${ctx.chat.id}: messages received from the database: ${messages.length}`);
 
     // Union the user message with messages
     messages = messages.concat({
@@ -272,7 +272,7 @@ bot.on(message('text'), async (ctx) => {
 
     // download all related messages from the database
     let messages = await selectMessagesByChatIdGPTformat(ctx.chat.id);
-    console.log(`User: ${ctx.from.username}, Chat: ${ctx.chat.id}: messages received from the database`);
+    console.log(`User: ${ctx.from.username}, Chat: ${ctx.chat.id}: messages received from the database: ${messages.length}`);
 
     // save the message to the database
     await insertMessage("user", userText, ctx.chat.id);
