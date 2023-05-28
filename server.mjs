@@ -3,6 +3,7 @@ import bodyParser from "body-parser";
 import dotenv from "dotenv";
 import fs from "fs";
 import axios from 'axios';
+import pTimeout from 'p-timeout';
 
 import pkg_t from 'telegraf';
 const { Telegraf } = pkg_t;
@@ -32,17 +33,6 @@ const pool = new Pool({
     rejectUnauthorized: false
   }
 });
-
-
-// utils
-
-function timeout(ms) {
-    return new Promise((resolve, reject) => {
-        setTimeout(() => {
-            reject(new Error("Timeout after " + ms + "ms"));
-        }, ms);
-    });
-}
 
 
 // Create needed tables if not exists
@@ -108,23 +98,25 @@ async function createChatCompletionWithRetry(messages, retries = 5, timeoutMs = 
 
     for(let i = 0; i < retries; i++){
         try {
-            let chatGPTAnswer = await Promise.race([
-                openai.createChatCompletion(
-                {
-                    model: "gpt-4",
-                    messages: messages,
-                    temperature: 0.7,
-                }),
-                timeout(timeoutMs)
-            ]);
+          const chatGPTAnswer = await pTimeout(
+            openai.createChatCompletion({
+              model: "gpt-4",
+              messages: messages,
+              temperature: 0.7,
+            }), 
+            timeoutMs,
+          )
+            .catch((error) => {
+                throw error;
+            });
 
-            if (chatGPTAnswer.status !== 200) {
-                throw new Error(`openai.createChatCompletion failed with status ${chatGPTAnswer.status}`);
-            }
-             
-            return chatGPTAnswer;
+          if (chatGPTAnswer.status !== 200) {
+              throw new Error(`openai.createChatCompletion failed with status ${chatGPTAnswer.status}`);
+          }
+            
+          return chatGPTAnswer;
         } catch (error) {
-            if (error.message.startsWith("Timeout after")) {
+            if (error instanceof pTimeout.TimeoutError) {
                 console.error(`openai.createChatCompletion timed out. Retries left: ${retries - i - 1}`);
             } else {
                 console.error(`openai.createChatCompletion failed. Retries left: ${retries - i - 1}`);
