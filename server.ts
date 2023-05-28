@@ -295,32 +295,44 @@ const defaultPromptMessageObj = {
 
 // OpenAI functions
 
-async function getUserSettingsAndOpenAi(user_id: number) {
-  const userSettings = await selectUserByUserId(user_id);
-  if (!userSettings) {
-    throw new Error(`User with user_id ${user_id} not found`);
-  }
-
-  // CHeck in PRIMARY_USERS_LIST env is defind
-  if (process.env.PRIMARY_USERS_LIST) {
-    const primaryUsers = process.env.PRIMARY_USERS_LIST.split(',');
-    if (
-      primaryUsers
-      && Array.isArray(primaryUsers)
-      && primaryUsers.includes(userSettings.username)
-    ) {
-      userSettings.openai_api_key = process.env.OPENAI_API_KEY;
+async function getUserSettingsAndOpenAiOrCreate(ctx: MyContext) {
+  if (ctx.from && ctx.from.id) {
+    const user_id = ctx.from.id;
+    let userSettings = await selectUserByUserId(user_id);
+    if (!userSettings) {
+      userSettings = {
+        user_id: user_id,
+        username: ctx.from.username,
+        default_language_code: ctx.from.language_code,
+        language_code: ctx.from.language_code,
+      }
+      insertUser(userSettings);
+      console.log(toLogFormat(ctx, `user created in the database`));
     }
-  }
 
-  if (!userSettings.openai_api_key) {
-    throw new NoOpenAiApiKeyError(`User with user_id ${user_id} has no openai_api_key`);
+    // CHeck in PRIMARY_USERS_LIST env is defind
+    if (process.env.PRIMARY_USERS_LIST) {
+      const primaryUsers = process.env.PRIMARY_USERS_LIST.split(',');
+      if (
+        primaryUsers
+        && Array.isArray(primaryUsers)
+        && primaryUsers.includes(userSettings.username)
+      ) {
+        userSettings.openai_api_key = process.env.OPENAI_API_KEY;
+      }
+    }
+
+    if (!userSettings.openai_api_key) {
+      throw new NoOpenAiApiKeyError(`User with user_id ${user_id} has no openai_api_key`);
+    }
+    const configuration = new Configuration({
+      apiKey: userSettings.openai_api_key,
+    });
+    const openai = new OpenAIApi(configuration);
+    return {settings: userSettings, openai: openai}
+  } else {
+    throw new Error('ctx.from.id is undefined');
   }
-  const configuration = new Configuration({
-    apiKey: userSettings.openai_api_key,
-  });
-  const openai = new OpenAIApi(configuration);
-  return {settings: userSettings, openai: openai}
 }
 
 const timeoutMsDefault = 2*60*1000;
@@ -715,7 +727,7 @@ bot.on(message('voice'), async (ctx: MyContext) => {
   try {
     let userData = null;
     try {
-      userData = await getUserSettingsAndOpenAi(ctx.from.id);
+      userData = await getUserSettingsAndOpenAiOrCreate(ctx);
     } catch (e) {
       if (e instanceof NoOpenAiApiKeyError) {
         ctx.reply('У вас не настроен OpenAI API ключ. Напишите /settings чтобы настроить его.');
@@ -838,7 +850,7 @@ bot.on(message('text'), async (ctx: MyContext) => {
     let userData = null;
     try {
       if (ctx.from && ctx.from.id) {
-        userData = await getUserSettingsAndOpenAi(ctx.from.id);
+        userData = await getUserSettingsAndOpenAiOrCreate(ctx);
       } else {
         throw new Error(`ctx.from.id is undefined`);
       }
