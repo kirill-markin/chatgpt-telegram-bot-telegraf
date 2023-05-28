@@ -34,6 +34,26 @@ const pool = new Pool({
 });
 
 
+// Create needed tables if not exists
+
+const createTableQuery = `
+  CREATE TABLE IF NOT EXISTS messages (
+    id SERIAL PRIMARY KEY,
+    role VARCHAR(255) NOT NULL,
+    content TEXT NOT NULL,
+    chat_id INT NOT NULL
+  );
+`;
+
+pool.query(createTableQuery, (err, res) => {
+  if (err) {
+    console.error('Error executing query', err.stack);
+  } else {
+    console.log('Table messages checked/created successfully');
+  }
+});
+
+
 // Database functions
 
 const selectMessagesByChatIdGPTformat = async (chatId) => {
