@@ -26,4 +26,4 @@ RUN npm install
 EXPOSE 8080
 
 # Define command to start your application
-CMD [ "node", "server.mjs" ]
+CMD [ "node", "--unhandled-rejections=strict", "server.mjs" ]
