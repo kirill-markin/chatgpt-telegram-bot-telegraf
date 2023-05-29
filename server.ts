@@ -812,16 +812,7 @@ bot.on(message('voice'), async (ctx: MyContext) => {
     saveAnswerToDB(chatResponse, ctx);
 
     // send the answer to the user
-    let answer = 'Я не знаю, что ответить';
-    if (
-      chatResponse
-      && chatResponse.data
-      && chatResponse.data.choices
-      && chatResponse.data.choices[0]
-      && chatResponse.data.choices[0].message
-    ) {
-      answer = chatResponse.data.choices[0].message.content;
-    }
+    let answer = chatResponse?.data?.choices?.[0]?.message?.content ?? 'Я не знаю, что ответить';
     
     ctx.reply(answer);
     console.log(toLogFormat(ctx, `answer sent to the user`));
@@ -925,16 +916,7 @@ bot.on(message('text'), async (ctx: MyContext) => {
     saveAnswerToDB(chatResponse, ctx);
 
     // send the answer to the user
-    let answer = 'Я не знаю, что ответить';
-    if (
-      chatResponse
-      && chatResponse.data
-      && chatResponse.data.choices
-      && chatResponse.data.choices[0]
-      && chatResponse.data.choices[0].message
-    ) {
-      answer = chatResponse.data.choices[0].message.content;
-    }
+    let answer = chatResponse?.data?.choices?.[0]?.message?.content ?? 'Я не знаю, что ответить';
     
     ctx.reply(answer);
     console.log(toLogFormat(ctx, `answer sent to the user`));
