@@ -310,7 +310,7 @@ async function getUserSettingsAndOpenAiOrCreate(ctx: MyContext) {
       console.log(toLogFormat(ctx, `user created in the database`));
     }
 
-    // CHeck in PRIMARY_USERS_LIST env is defind
+    // Check in PRIMARY_USERS_LIST env is defind
     if (process.env.PRIMARY_USERS_LIST) {
       const primaryUsers = process.env.PRIMARY_USERS_LIST.split(',');
       if (
@@ -319,6 +319,7 @@ async function getUserSettingsAndOpenAiOrCreate(ctx: MyContext) {
         && primaryUsers.includes(userSettings.username)
       ) {
         userSettings.openai_api_key = process.env.OPENAI_API_KEY;
+        console.log(toLogFormat(ctx, `user is in the primary users list, openai_api_key set from .env.`));
       }
     }
 
@@ -335,9 +336,7 @@ async function getUserSettingsAndOpenAiOrCreate(ctx: MyContext) {
   }
 }
 
-const timeoutMsDefault = 2*60*1000;
-
-async function createChatCompletionWithRetry(messages: MyMessage[], openai: OpenAIApi, retries = 5, timeoutMs = timeoutMsDefault) {
+async function createChatCompletionWithRetry(messages: MyMessage[], openai: OpenAIApi, retries = 5, timeoutMs = timeoutMsDefaultchatGPT) {
   for(let i = 0; i < retries; i++) {
     try {
       const chatGPTAnswer = await pTimeout(
@@ -345,6 +344,7 @@ async function createChatCompletionWithRetry(messages: MyMessage[], openai: Open
           model: "gpt-4",
           messages: messages,
           temperature: 0.7,
+          max_tokens: 1000,
         }),
         timeoutMs,
       )
@@ -369,7 +369,7 @@ async function createChatCompletionWithRetry(messages: MyMessage[], openai: Open
   }
 }
 
-async function createChatCompletionWithRetryAndReduceHistory(messages: MyMessage[], openai: OpenAIApi, retries = 5, timeoutMs = timeoutMsDefault): Promise<AxiosResponse<CreateChatCompletionResponse, any> | undefined> {
+async function createChatCompletionWithRetryAndReduceHistory(messages: MyMessage[], openai: OpenAIApi, retries = 5, timeoutMs = timeoutMsDefaultchatGPT): Promise<AxiosResponse<CreateChatCompletionResponse, any> | undefined> {
   try {
     // Calculate total length of messages and prompt
     let totalLength = messages.reduce((acc, message) => acc + message.content.length, 0) + defaultPromptMessage.length;
@@ -377,7 +377,7 @@ async function createChatCompletionWithRetryAndReduceHistory(messages: MyMessage
     // lettersThreshold is the approximate limit of tokens for GPT-4 in letters
     let messagesCleanned;
 
-    const lettersThreshold = 13000;
+    const lettersThreshold = 15000;
     
     if (totalLength <= lettersThreshold) {
         messagesCleanned = [...messages]; // create a copy of messages if totalLength is within limit
@@ -502,7 +502,8 @@ async function saveCommandToDB(ctx: MyContext, command: string) {
 
 // BOT
 
-const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN, {handlerTimeout: 12*60*1000});
+const timeoutMsDefaultchatGPT = 5*60*1000;
+const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN, {handlerTimeout: timeoutMsDefaultchatGPT*6});
 
 const waitAndLog = async (stopSignal: any, func: any) => {
   while (!stopSignal()) {
