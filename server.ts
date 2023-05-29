@@ -377,7 +377,7 @@ async function createChatCompletionWithRetryAndReduceHistory(messages: MyMessage
     // lettersThreshold is the approximate limit of tokens for GPT-4 in letters
     let messagesCleanned;
 
-    const lettersThreshold = 15000;
+    const lettersThreshold = 13000;
     
     if (totalLength <= lettersThreshold) {
         messagesCleanned = [...messages]; // create a copy of messages if totalLength is within limit
