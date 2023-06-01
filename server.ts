@@ -769,6 +769,15 @@ async function processTextMessage(ctx: MyContext) {
       throw new Error(`ctx.message.text is undefined`);
     }
 
+    // download all related messages from the database
+    let messages = await selectMessagesByChatIdGPTformat(ctx);
+
+    // Union the user message with messages
+    messages = messages.concat({
+      role: "user",
+      content: userText,
+    } as MyMessage);
+
     // save the message to the database
     if (ctx.chat && ctx.chat.id && ctx.from && ctx.from.id) {
       insertMessage({
@@ -803,15 +812,6 @@ async function processTextMessage(ctx: MyContext) {
     } else {
       throw new Error(`ctx.chat.id or ctx.from.id is undefined`);
     }
-
-    // download all related messages from the database
-    let messages = await selectMessagesByChatIdGPTformat(ctx);
-
-    // Union the user message with messages
-    messages = messages.concat({
-      role: "user",
-      content: userText,
-    } as MyMessage);
 
     // Send this text to OpenAI's Chat GPT-4 model with retry logic
     let chatResponse = await createChatCompletionWithRetryAndReduceHistory(
