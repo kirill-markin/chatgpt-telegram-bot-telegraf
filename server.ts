@@ -554,6 +554,7 @@ const helpString = `Бот GPT Кирилла Маркина - голосово�
 const errorString = `Произошла ошибка во время обработки сообщения. Скажите Кириллу — пусть починит. Telegram Кирилла: @kirmark`
 
 bot.start((ctx: MyContext) => {
+  console.log(toLogFormat(ctx, `/start command received`));
   if (ctx.from && ctx.from.id) {
     insertUser({
       user_id: ctx.from.id,
@@ -561,6 +562,7 @@ bot.start((ctx: MyContext) => {
       default_language_code: ctx.from.language_code,
       language_code: ctx.from.language_code,
     } as User);
+    console.log(toLogFormat(ctx, `user saved to the database`));
   } else {
     throw new Error(`ctx.from.id is undefined`);
   }
