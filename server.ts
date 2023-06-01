@@ -98,7 +98,8 @@ const createTableQueries = [
     username VARCHAR(255),
     default_language_code VARCHAR(255),
     language_code VARCHAR(255),
-    openai_api_key VARCHAR(255)
+    openai_api_key VARCHAR(255),
+    usage_type VARCHAR(255) DEFAULT NULL
   );
   `,
   `
@@ -310,17 +311,10 @@ async function getUserSettingsAndOpenAiOrCreate(ctx: MyContext) {
       console.log(toLogFormat(ctx, `user created in the database`));
     }
 
-    // Check in PRIMARY_USERS_LIST env is defind
-    if (process.env.PRIMARY_USERS_LIST) {
-      const primaryUsers = process.env.PRIMARY_USERS_LIST.split(',');
-      if (
-        primaryUsers
-        && Array.isArray(primaryUsers)
-        && primaryUsers.includes(userSettings.username)
-      ) {
-        userSettings.openai_api_key = process.env.OPENAI_API_KEY;
-        console.log(toLogFormat(ctx, `user is in the primary users list, openai_api_key set from .env.`));
-      }
+    // Check if user is premium
+    if (userSettings.usage_type === "premium") {
+      userSettings.openai_api_key = process.env.OPENAI_API_KEY;
+      console.log(toLogFormat(ctx, `user is premium, openai_api_key set from .env.`));
     }
 
     if (!userSettings.openai_api_key) {
