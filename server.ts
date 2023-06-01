@@ -505,6 +505,10 @@ async function saveCommandToDB(ctx: MyContext, command: string) {
 const timeoutMsDefaultchatGPT = 5*60*1000;
 const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN, {handlerTimeout: timeoutMsDefaultchatGPT*6});
 
+bot.telegram.getMe().then((botInfo) => {
+  bot.options.username = botInfo.username;
+})
+
 const waitAndLog = async (stopSignal: any, func: any) => {
   while (!stopSignal()) {
     await new Promise(resolve => setTimeout(resolve, 2000));
@@ -545,6 +549,7 @@ bot.use(async (ctx: MyContext, next) => {
   const ms = new Date().getTime() - start.getTime() ;
   console.log(toLogFormat(ctx, `message processed. Response time: ${ms / 1000} seconds.`));
 });
+
 const helpString = `Бот GPT Кирилла Маркина - голосовой помощник, который понимает аудиосообщения на русском языке 😊`
 const errorString = `Произошла ошибка во время обработки сообщения. Скажите Кириллу — пусть починит. Telegram Кирилла: @kirmark`
 
@@ -598,102 +603,7 @@ bot.command('settings', (ctx: MyContext) => {
   saveCommandToDB(ctx, 'settings');
 });
 
-
-bot.on(message('photo'), (ctx: MyContext) => {
-  console.log(toLogFormat(ctx, `photo received`));
-  ctx.reply('Робот пока что не умеет работать с фото и проигнорирует это сообщение.');
-  if (ctx.from && ctx.from.id && ctx.chat && ctx.chat.id) {
-    insertEvent({
-      type: 'user_message',
-
-      user_id: ctx.from.id,
-      user_is_bot: ctx.from.is_bot,
-      user_language_code: ctx.from.language_code,
-      user_username: ctx.from.username,
-
-      chat_id: ctx.chat.id,
-      chat_type: ctx.chat.type,
-
-      message_role: "user",
-      messages_type: "photo",
-      message_voice_duration: null,
-      message_command: null,
-      content_length: null,
-
-      usage_model: null,
-      usage_object: null,
-      usage_completion_tokens: null,
-      usage_prompt_tokens: null,
-      usage_total_tokens: null,
-    } as Event);
-  } else {
-    throw new Error(`ctx.from.id or ctx.chat.id is undefined`);
-  }
-});
-bot.on(message('video'), (ctx: MyContext) => {
-  console.log(toLogFormat(ctx, `video received`));
-  ctx.reply('Робот пока что не умеет работать с видео и проигнорирует это сообщение.');
-  if (ctx.from && ctx.from.id && ctx.chat && ctx.chat.id) {
-    insertEvent({
-      type: 'user_message',
-
-      user_id: ctx.from.id,
-      user_is_bot: ctx.from.is_bot,
-      user_language_code: ctx.from.language_code,
-      user_username: ctx.from.username,
-
-      chat_id: ctx.chat.id,
-      chat_type: ctx.chat.type,
-
-      message_role: "user",
-      messages_type: "video",
-      message_voice_duration: null,
-      message_command: null,
-      content_length: null,
-
-      usage_model: null,
-      usage_object: null,
-      usage_completion_tokens: null,
-      usage_prompt_tokens: null,
-      usage_total_tokens: null,
-    } as Event);
-  } else {
-    throw new Error(`ctx.from.id or ctx.chat.id is undefined`);
-  }
-});
-bot.on(message('sticker'), (ctx: MyContext) => {
-  console.log(toLogFormat(ctx, `sticker received`));
-  ctx.reply('👍');
-  if (ctx.from && ctx.from.id && ctx.chat && ctx.chat.id) {
-    insertEvent({
-      type: 'user_message',
-
-      user_id: ctx.from.id,
-      user_is_bot: ctx.from.is_bot,
-      user_language_code: ctx.from.language_code,
-      user_username: ctx.from.username,
-
-      chat_id: ctx.chat.id,
-      chat_type: ctx.chat.type,
-
-      message_role: "user",
-      messages_type: "sticker",
-      message_voice_duration: null,
-      message_command: null,
-      content_length: null,
-
-      usage_model: null,
-      usage_object: null,
-      usage_completion_tokens: null,
-      usage_prompt_tokens: null,
-      usage_total_tokens: null,
-    } as Event);
-  } else {
-    throw new Error(`ctx.from.id or ctx.chat.id is undefined`);
-  }
-});
-bot.on(message('voice'), async (ctx: MyContext) => {
-  console.log(toLogFormat(ctx, `[NEW] voice received`));
+async function processVoiceMessage(ctx: MyContext) {
   if (
     ctx.from && ctx.from.id && ctx.chat && ctx.chat.id && ctx.message 
     && ctx.message.voice && ctx.message.voice.duration
@@ -833,11 +743,9 @@ bot.on(message('voice'), async (ctx: MyContext) => {
     console.error(toLogFormat(ctx, `[ERROR] error occurred: ${e}`));
     ctx.reply(errorString);
   }
-});
+}
 
-bot.on(message('text'), async (ctx: MyContext) => {
-  console.log(toLogFormat(ctx, `[NEW] text received`));
-
+async function processTextMessage(ctx: MyContext) {
   try {
     let userData = null;
     try {
@@ -924,7 +832,114 @@ bot.on(message('text'), async (ctx: MyContext) => {
     console.error(toLogFormat(ctx, `[ERROR] error occurred: ${e}`));
     ctx.reply(errorString);
   }
+}
+
+bot.on(message('photo'), (ctx: MyContext) => {
+  console.log(toLogFormat(ctx, `photo received`));
+  ctx.reply('Робот пока что не умеет работать с фото и проигнорирует это сообщение.');
+  if (ctx.from && ctx.from.id && ctx.chat && ctx.chat.id) {
+    insertEvent({
+      type: 'user_message',
+
+      user_id: ctx.from.id,
+      user_is_bot: ctx.from.is_bot,
+      user_language_code: ctx.from.language_code,
+      user_username: ctx.from.username,
+
+      chat_id: ctx.chat.id,
+      chat_type: ctx.chat.type,
+
+      message_role: "user",
+      messages_type: "photo",
+      message_voice_duration: null,
+      message_command: null,
+      content_length: null,
+
+      usage_model: null,
+      usage_object: null,
+      usage_completion_tokens: null,
+      usage_prompt_tokens: null,
+      usage_total_tokens: null,
+    } as Event);
+  } else {
+    throw new Error(`ctx.from.id or ctx.chat.id is undefined`);
+  }
 });
+
+bot.on(message('video'), (ctx: MyContext) => {
+  console.log(toLogFormat(ctx, `video received`));
+  ctx.reply('Робот пока что не умеет работать с видео и проигнорирует это сообщение.');
+  if (ctx.from && ctx.from.id && ctx.chat && ctx.chat.id) {
+    insertEvent({
+      type: 'user_message',
+
+      user_id: ctx.from.id,
+      user_is_bot: ctx.from.is_bot,
+      user_language_code: ctx.from.language_code,
+      user_username: ctx.from.username,
+
+      chat_id: ctx.chat.id,
+      chat_type: ctx.chat.type,
+
+      message_role: "user",
+      messages_type: "video",
+      message_voice_duration: null,
+      message_command: null,
+      content_length: null,
+
+      usage_model: null,
+      usage_object: null,
+      usage_completion_tokens: null,
+      usage_prompt_tokens: null,
+      usage_total_tokens: null,
+    } as Event);
+  } else {
+    throw new Error(`ctx.from.id or ctx.chat.id is undefined`);
+  }
+});
+
+bot.on(message('sticker'), (ctx: MyContext) => {
+  console.log(toLogFormat(ctx, `sticker received`));
+  ctx.reply('👍');
+  if (ctx.from && ctx.from.id && ctx.chat && ctx.chat.id) {
+    insertEvent({
+      type: 'user_message',
+
+      user_id: ctx.from.id,
+      user_is_bot: ctx.from.is_bot,
+      user_language_code: ctx.from.language_code,
+      user_username: ctx.from.username,
+
+      chat_id: ctx.chat.id,
+      chat_type: ctx.chat.type,
+
+      message_role: "user",
+      messages_type: "sticker",
+      message_voice_duration: null,
+      message_command: null,
+      content_length: null,
+
+      usage_model: null,
+      usage_object: null,
+      usage_completion_tokens: null,
+      usage_prompt_tokens: null,
+      usage_total_tokens: null,
+    } as Event);
+  } else {
+    throw new Error(`ctx.from.id or ctx.chat.id is undefined`);
+  }
+});
+
+bot.on(message('voice'), async (ctx: MyContext) => {
+  console.log(toLogFormat(ctx, `[NEW] voice received`));
+  processVoiceMessage(ctx);
+});
+
+bot.on(message('text'), async (ctx: MyContext) => {
+  console.log(toLogFormat(ctx, `[NEW] text received`));
+  processTextMessage(ctx);
+});
+
 bot.launch()
 
 
