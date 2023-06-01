@@ -338,7 +338,7 @@ async function createChatCompletionWithRetry(messages: MyMessage[], openai: Open
           model: "gpt-4",
           messages: messages,
           temperature: 0.7,
-          max_tokens: 1000,
+          // max_tokens: 1000,
         }),
         timeoutMs,
       )
@@ -496,7 +496,7 @@ async function saveCommandToDB(ctx: MyContext, command: string) {
 
 // BOT
 
-const timeoutMsDefaultchatGPT = 5*60*1000;
+const timeoutMsDefaultchatGPT = 6*60*1000;
 const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN, {handlerTimeout: timeoutMsDefaultchatGPT*6});
 
 bot.telegram.getMe().then((botInfo) => {
