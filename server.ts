@@ -448,7 +448,7 @@ async function saveAnswerToDB(chatResponse: any, ctx: MyContext) {
         usage_prompt_tokens: chatResponse.data.usage.prompt_tokens,
         usage_total_tokens: chatResponse.data.usage.total_tokens,
       } as Event);
-      console.log(toLogFormat(ctx, `answer saved to the database`));
+      console.log(toLogFormat(ctx, `answer saved to the database. total_tokens: ${chatResponse.data.usage.total_tokens}`));
     } else {
       throw new Error(`ctx.from.id is undefined`);
     }
