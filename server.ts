@@ -94,7 +94,7 @@ const createTableQueries = [
   `
   CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
-    user_id INT UNIQUE NOT NULL,
+    user_id bigint UNIQUE NOT NULL,
     username VARCHAR(255),
     default_language_code VARCHAR(255),
     language_code VARCHAR(255),
@@ -108,7 +108,7 @@ const createTableQueries = [
     time TIMESTAMP NOT NULL,
     type VARCHAR(255) NOT NULL,
 
-    user_id INT,
+    user_id bigint,
     user_is_bot BOOLEAN,
     user_language_code VARCHAR(255),
     user_username VARCHAR(255),
