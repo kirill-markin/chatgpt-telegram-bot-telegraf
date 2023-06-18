@@ -88,7 +88,7 @@ const createTableQueries = [
     id SERIAL PRIMARY KEY,
     role VARCHAR(255) NOT NULL,
     content TEXT NOT NULL,
-    chat_id INT NOT NULL
+    chat_id bigint NOT NULL
   );
   `,
   `
@@ -113,7 +113,7 @@ const createTableQueries = [
     user_language_code VARCHAR(255),
     user_username VARCHAR(255),
 
-    chat_id INT,
+    chat_id bigint,
     chat_type VARCHAR(255),
 
     message_role VARCHAR(255),
