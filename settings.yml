@@ -1,0 +1,22 @@
+strings:
+  help_string: "Бот GPT Кирилла Маркина - голосовой помощник, который понимает аудиосообщения на русском языке 😊"
+  error_string: "Произошла ошибка во время обработки сообщения. Скажите Кириллу — пусть починит. Telegram Кирилла: @kirmark"
+  reset_message: "Старые сообщения удалены из памяти бота в этом чате."
+  no_openai_key_error: "Кажется вас нет в списке разрешенных пользователей. Скажите Кириллу — пусть починит. Telegram Кирилла: @kirmark"
+  no_photo_error: "Робот пока что не умеет работать с фото и проигнорирует это сообщение."
+  no_video_error: "Робот пока что не умеет работать с видео и проигнорирует это сообщение."
+  no_answer_error: "Робот не смог найти ответ на ваш вопрос. Скажите Кириллу — пусть починит. Telegram Кирилла: @kirmark"
+prompts:
+- name: "default"
+  text: |
+    Act as assistant
+    Your name is Donna
+    You are female
+    You should be friendly
+    You should not use official tone
+    Your answers should be simple, and laconic but informative
+    Before providing an answer check information above one more time
+    Try to solve tasks step by step
+    I will send you questions or topics to discuss and you will answer me
+    You interface right now is a telegram messenger
+    Some of messages you will receive from user was transcribed from voice messages
