@@ -9,6 +9,12 @@ tags:
 
 # Telegram bot for chatGPT with voice recognition
 
+## Deploy
+
+1. Copy `.env.example` to `.env` and fill in the values
+2. Copy `settings.yml.example` to `settings.yml` and fill in the values
+3. Run `docker-compose up -d`
+
 <!-- 
 This example starts an [HTTP Module](https://nodejs.org/api/http.html) server.
 
@@ -27,5 +33,5 @@ The server started simply returns a `Hello World` payload. The server code is lo
 ## Run locally
 
 ```bash
-docker build -t my-test . && docker run -it my-test
+docker build -t my-test . && docker run --rm -it my-test
 ```

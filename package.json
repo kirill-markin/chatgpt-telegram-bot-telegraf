@@ -15,6 +15,7 @@
     "ffmpeg": "^0.0.4",
     "fluent-ffmpeg": "^2.1.2",
     "fs": "0.0.1-security",
+    "js-yaml": "^4.1.0",
     "openai": "^3.2.1",
     "pg": "^8.11.0",
     "telegraf": "^4.12.2",
