@@ -1,9 +1,8 @@
-import express from "express";
-import bodyParser from "body-parser";
 import dotenv from "dotenv";
 import fs from "fs";
 import axios, { AxiosResponse } from 'axios';
 import pTimeout from 'p-timeout';
+import yaml from 'js-yaml';
 
 import { Context, session, Telegraf } from "telegraf";
 import { message, editedMessage, channelPost, editedChannelPost, callbackQuery } from "telegraf/filters";
@@ -21,6 +20,11 @@ interface MyContext extends Context {
 
 interface MyMessage extends ChatCompletionRequestMessage{
   chat_id: number;
+}
+
+interface Prompt {
+  name: string;
+  text: string;
 }
 
 interface User {
@@ -79,6 +83,15 @@ const pool = new Pool({
   }
 });
 
+const prompts_path = process.env.SETTINGS_PATH || './settings.yml';
+const fileContents = fs.readFileSync(prompts_path, 'utf8');
+const bot_settings = yaml.load(fileContents);
+
+const RESET_MESSAGE = bot_settings.strings.reset_message || 'Old messages deleted';
+const NO_OPENAI_KEY_ERROR = bot_settings.strings.no_openai_key_error || 'No OpenAI key provided. Please contact the bot owner.';
+const NO_PHOTO_ERROR = bot_settings.strings.no_photo_error || 'Bot can not process photos.';
+const NO_VIDEO_ERROR = bot_settings.strings.no_video_error || 'Bot can not process videos.';
+const NO_ANSWER_ERROR = bot_settings.strings.no_answer_error || 'Bot can not answer to this message.';
 
 // Create needed tables if not exists
 
@@ -276,23 +289,18 @@ const deleteMessagesByChatId = async (chat_id: number) => {
 
 // default prompt message to add to the GPT-4 model
 
-const defaultPromptMessage = (`
-Act as assistant
-Your name is Donna
-You are female
-You should be friendly
-You should not use official tone
-Your answers should be simple, and laconic but informative
-Before providing an answer check information above one more time
-Try to solve tasks step by step
-I will send you questions or topics to discuss and you will answer me
-You interface right now is a telegram messenger
-Some of messages you will receive from user was transcribed from voice messages
-`)
-const defaultPromptMessageObj = {
-  "role": "assistant",
-  "content": defaultPromptMessage,
-} as MyMessage;
+const defaultPrompt: Prompt | undefined = bot_settings.prompts.find((prompt: Prompt) => prompt.name === 'default');
+const defaultPromptMessage = defaultPrompt ? defaultPrompt.text : '';
+
+let defaultPromptMessageObj = {} as MyMessage;
+if (defaultPromptMessage) {
+  defaultPromptMessageObj = {
+    "role": "assistant",
+    "content": defaultPromptMessage.toString(),
+  } as MyMessage;
+} else {
+  console.log('Default prompt message not found');
+}
 
 // OpenAI functions
 
@@ -315,6 +323,8 @@ async function getUserSettingsAndOpenAiOrCreate(ctx: MyContext) {
     if (userSettings.usage_type === "premium") {
       userSettings.openai_api_key = process.env.OPENAI_API_KEY;
       console.log(toLogFormat(ctx, `user is premium, openai_api_key set from .env.`));
+    } else {
+      console.log(toLogFormat(ctx, `[ACCESS DENIED] user is not premium, openai_api_key not set.`));
     }
 
     if (!userSettings.openai_api_key) {
@@ -544,8 +554,8 @@ bot.use(async (ctx: MyContext, next) => {
   console.log(toLogFormat(ctx, `message processed. Response time: ${ms / 1000} seconds.`));
 });
 
-const helpString = `Бот GPT Кирилла Маркина - голосовой помощник, который понимает аудиосообщения на русском языке 😊`
-const errorString = `Произошла ошибка во время обработки сообщения. Скажите Кириллу — пусть починит. Telegram Кирилла: @kirmark`
+const helpString = bot_settings.strings.help_string;
+const errorString = bot_settings.strings.error_string;
 
 bot.start((ctx: MyContext) => {
   console.log(toLogFormat(ctx, `/start command received`));
@@ -575,29 +585,18 @@ bot.command('reset', (ctx: MyContext) => {
     throw new Error(`ctx.chat.id is undefined`);
   }
   console.log(toLogFormat(ctx, `messages deleted from database`));
-  ctx.reply('Старые сообщения удалены из памяти бота в этом чате.')
+  ctx.reply(RESET_MESSAGE)
   saveCommandToDB(ctx, 'reset');
 });
 
-bot.command('settings', (ctx: MyContext) => {
-  ctx.state.command = { raw: '/settings' };
-  console.log(ctx)
-  console.log(toLogFormat(ctx, `/settings command received`));
+// TODO: update user settings and openAIKey
+// bot.command('settings', (ctx: MyContext) => {
+//   ctx.state.command = { raw: '/settings' };
+//   console.log(ctx)
+//   console.log(toLogFormat(ctx, `/settings command received`));
   
-  // TODO: update user settings and openAIKey
-  // if (ctx.from && ctx.from.id) {
-  //   insertUser({
-  //     user_id: ctx.from.id,
-  //     username: ctx.from.username,
-  //     default_language_code: ctx.from.language_code,
-  //     openai_key: openAIKey,
-  //   })
-  // } else {
-  //   throw new Error(`ctx.from.id is undefined`);
-  // }
-  
-  saveCommandToDB(ctx, 'settings');
-});
+//   saveCommandToDB(ctx, 'settings');
+// });
 
 async function processVoiceMessage(ctx: MyContext) {
   if (
@@ -637,7 +636,7 @@ async function processVoiceMessage(ctx: MyContext) {
       userData = await getUserSettingsAndOpenAiOrCreate(ctx);
     } catch (e) {
       if (e instanceof NoOpenAiApiKeyError) {
-        ctx.reply('У вас не настроен OpenAI API ключ. Напишите /settings чтобы настроить его.');
+        ctx.reply(NO_OPENAI_KEY_ERROR);
         return;
       } else {
         throw e;
@@ -718,7 +717,7 @@ async function processVoiceMessage(ctx: MyContext) {
     saveAnswerToDB(chatResponse, ctx);
 
     // send the answer to the user
-    let answer = chatResponse?.data?.choices?.[0]?.message?.content ?? 'Я не знаю, что ответить';
+    let answer = chatResponse?.data?.choices?.[0]?.message?.content ?? NO_ANSWER_ERROR;
     
     ctx.reply(answer);
     console.log(toLogFormat(ctx, `answer sent to the user`));
@@ -752,7 +751,7 @@ async function processTextMessage(ctx: MyContext) {
       }
     } catch (e) {
       if (e instanceof NoOpenAiApiKeyError) {
-        ctx.reply('У вас не настроен OpenAI API ключ. Напишите /settings чтобы настроить его.');
+        ctx.reply(NO_OPENAI_KEY_ERROR);
         return;
       } else {
         throw e;
@@ -820,7 +819,7 @@ async function processTextMessage(ctx: MyContext) {
     saveAnswerToDB(chatResponse, ctx);
 
     // send the answer to the user
-    let answer = chatResponse?.data?.choices?.[0]?.message?.content ?? 'Я не знаю, что ответить';
+    let answer = chatResponse?.data?.choices?.[0]?.message?.content ?? NO_ANSWER_ERROR;
     
     ctx.reply(answer);
     console.log(toLogFormat(ctx, `answer sent to the user`));
@@ -832,7 +831,7 @@ async function processTextMessage(ctx: MyContext) {
 
 bot.on(message('photo'), (ctx: MyContext) => {
   console.log(toLogFormat(ctx, `photo received`));
-  ctx.reply('Робот пока что не умеет работать с фото и проигнорирует это сообщение.');
+  ctx.reply(NO_PHOTO_ERROR);
   if (ctx.from && ctx.from.id && ctx.chat && ctx.chat.id) {
     insertEvent({
       type: 'user_message',
@@ -864,7 +863,7 @@ bot.on(message('photo'), (ctx: MyContext) => {
 
 bot.on(message('video'), (ctx: MyContext) => {
   console.log(toLogFormat(ctx, `video received`));
-  ctx.reply('Робот пока что не умеет работать с видео и проигнорирует это сообщение.');
+  ctx.reply(NO_VIDEO_ERROR);
   if (ctx.from && ctx.from.id && ctx.chat && ctx.chat.id) {
     insertEvent({
       type: 'user_message',
@@ -939,36 +938,39 @@ bot.on(message('text'), async (ctx: MyContext) => {
 bot.launch()
 
 
+// import express from "express";
+// import bodyParser from "body-parser";
+
 // Web APP
 
-const app = express();
-const PORT = process.env.PORT || 5000;
-app.use(bodyParser.urlencoded({ extended: false }));
-app.use(bodyParser.json());
+// const app = express();
+// const PORT = process.env.PORT || 5000;
+// app.use(bodyParser.urlencoded({ extended: false }));
+// app.use(bodyParser.json());
 
-const router = express.Router();
+// const router = express.Router();
 
-app.get("/", (req, res) => {
-  res
-    .status(405)
-    .send(
-      "405 Method Not Allowed."
-    );
-});
+// app.get("/", (req, res) => {
+//   res
+//     .status(405)
+//     .send(
+//       "405 Method Not Allowed."
+//     );
+// });
 
-app.get("/webhook", (req, res) => {
-  res
-    .status(405)
-    .send(
-      "405 Method Not Allowed."
-    );
-});
+// app.get("/webhook", (req, res) => {
+//   res
+//     .status(405)
+//     .send(
+//       "405 Method Not Allowed."
+//     );
+// });
 
-app.use("/", router);
+// app.use("/", router);
 
-app.listen(PORT, (err) => {
-  if (err) {
-    console.error(err);
-  }
-  console.log(`Server listening on port ${PORT}`);
-});
+// app.listen(PORT, (err) => {
+//   if (err) {
+//     console.error(err);
+//   }
+//   console.log(`Server listening on port ${PORT}`);
+// });
