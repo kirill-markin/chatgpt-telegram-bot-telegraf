@@ -27,5 +27,5 @@ The server started simply returns a `Hello World` payload. The server code is lo
 ## Run locally
 
 ```bash
-docker build -t my-test . && docker run -it my-test
+docker build -t my-test . && docker run --rm -it my-test
 ```
