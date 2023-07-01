@@ -83,7 +83,7 @@ const pool = new Pool({
   }
 });
 
-const prompts_path = process.env.SETTINGS_PATH || './settings.yml';
+const prompts_path = process.env.SETTINGS_PATH || './settings/private_ru.yaml';
 const fileContents = fs.readFileSync(prompts_path, 'utf8');
 const bot_settings = yaml.load(fileContents);
 
