@@ -10,6 +10,8 @@ import { message, editedMessage, channelPost, editedChannelPost, callbackQuery }
 import ffmpeg from 'fluent-ffmpeg';
 import { Configuration, OpenAIApi, ChatCompletionRequestMessage, CreateChatCompletionResponse } from 'openai';
 
+import { PineconeClient } from "@pinecone-database/pinecone";
+
 interface SessionData {
 	messageCount: number;
 }
@@ -83,10 +85,33 @@ const pool = new Pool({
   }
 });
 
+// Connect to the Pinecone database
+
+let pineconeIndex: any = null;
+if (
+  process.env.PINECONE_ENVIRONMENT 
+  && process.env.PINECONE_API_KEY
+  && process.env.PINECONE_INDEX_NAME
+) {
+  (async () => {
+    const pinecone = new PineconeClient();
+    pinecone.projectName = process.env.PINECONE_PROJECT_NAME || null;
+    await pinecone.init({
+      environment: process.env.PINECONE_ENVIRONMENT,
+      apiKey: process.env.PINECONE_API_KEY,
+    });
+    pineconeIndex = pinecone.Index(process.env.PINECONE_INDEX_NAME);
+    console.log('Pinecone database connected');
+  })();
+} else {
+  console.log('Pinecone database not connected');
+}
+
 const prompts_path = process.env.SETTINGS_PATH || './settings/private_en.yaml';
 const fileContents = fs.readFileSync(prompts_path, 'utf8');
 const bot_settings = yaml.load(fileContents);
 
+const GPT_MODEL = bot_settings.gpt_model || "gpt-3.5-turbo-16k";
 const RESET_MESSAGE = bot_settings.strings.reset_message || 'Old messages deleted';
 const NO_OPENAI_KEY_ERROR = bot_settings.strings.no_openai_key_error || 'No OpenAI key provided. Please contact the bot owner.';
 const NO_PHOTO_ERROR = bot_settings.strings.no_photo_error || 'Bot can not process photos.';
@@ -287,7 +312,7 @@ const deleteMessagesByChatId = async (chat_id: number) => {
 }
 
 
-// default prompt message to add to the GPT-4 model
+// default prompt message to add to the GPT model
 
 const defaultPrompt: Prompt | undefined = bot_settings.prompts.find((prompt: Prompt) => prompt.name === 'default');
 const defaultPromptMessage = defaultPrompt ? defaultPrompt.text : '';
@@ -345,7 +370,7 @@ async function createChatCompletionWithRetry(messages: MyMessage[], openai: Open
     try {
       const chatGPTAnswer = await pTimeout(
         openai.createChatCompletion({
-          model: "gpt-4",
+          model: GPT_MODEL,
           messages: messages,
           temperature: 0.7,
           // max_tokens: 1000,
@@ -373,16 +398,60 @@ async function createChatCompletionWithRetry(messages: MyMessage[], openai: Open
   }
 }
 
-async function createChatCompletionWithRetryAndReduceHistory(messages: MyMessage[], openai: OpenAIApi, retries = 5, timeoutMs = timeoutMsDefaultchatGPT): Promise<AxiosResponse<CreateChatCompletionResponse, any> | undefined> {
+async function createChatCompletionWithRetryReduceHistoryLongtermMemory(messages: MyMessage[], openai: OpenAIApi, pineconeIndex: any, retries = 5, timeoutMs = timeoutMsDefaultchatGPT): Promise<AxiosResponse<CreateChatCompletionResponse, any> | undefined> {
   try {
+    // Add longterm memory to the messages based on pineconeIndex
+
+    let referenceMessageObj: any = undefined;
+    if (pineconeIndex) {
+      // Get embeddings for last user messages
+      const lastMessagesThreshold = 4;
+      const userMessagesText = messages
+        .filter((message) => message.role === 'user')
+        .slice(-lastMessagesThreshold)
+        .map((message) => message.content)
+        .join('\n');
+      // Make the embedding request and return the result
+      const resp = await openai.createEmbedding({
+        model: 'text-embedding-ada-002',
+        input: userMessagesText,
+      })
+      const embedding = resp?.data.data[0].embedding;
+
+      const queryRequest = {
+        vector: embedding,
+        topK: 8,
+        includeValues: false,
+        includeMetadata: true,
+      };
+      const queryResponse = await pineconeIndex.query({ queryRequest });
+
+      // TODO: add wiki URLs to the referenceMessage from metadata.source
+
+      const referenceText =
+        "Related to this conversation document parts:\n" 
+        + queryResponse.matches.map(
+            (match: any) => match.metadata.text
+          ).join('\n');
+      
+      referenceMessageObj = {
+        "role": "assistant",
+        "content": referenceText,
+      } as MyMessage;
+    }
+
+
+    // Reduce history
+
+    // lettersThreshold is the approximate limit of tokens for GPT-4 in letters
+    const lettersThreshold = 
+      15000 
+      - defaultPromptMessageObj.content.length 
+      - (referenceMessageObj ? referenceMessageObj.content.length : 0);
+
     // Calculate total length of messages and prompt
     let totalLength = messages.reduce((acc, message) => acc + message.content.length, 0) + defaultPromptMessage.length;
-    
-    // lettersThreshold is the approximate limit of tokens for GPT-4 in letters
     let messagesCleanned;
-
-    const lettersThreshold = 15000;
-    
     if (totalLength <= lettersThreshold) {
         messagesCleanned = [...messages]; // create a copy of messages if totalLength is within limit
     } else {
@@ -397,8 +466,15 @@ async function createChatCompletionWithRetryAndReduceHistory(messages: MyMessage
     
         messagesCleanned = messagesCopy.reverse(); // reverse the messages back to the original order
     }
+
+    let finalMessages = [defaultPromptMessageObj]
+    if (referenceMessageObj) {
+      finalMessages.push(referenceMessageObj);
+    }
+    finalMessages = finalMessages.concat(messagesCleanned);
+
     const chatGPTAnswer = await createChatCompletionWithRetry(
-      messages = [defaultPromptMessageObj, ...messagesCleanned],
+      messages = finalMessages,
       openai,
       retries,
       timeoutMs,
@@ -709,8 +785,12 @@ async function processVoiceMessage(ctx: MyContext) {
     } as Event);
     console.log(toLogFormat(ctx, `new voice transcription saved to the database`));
 
-    // Send this text to OpenAI's Chat GPT-4 model with retry logic
-    const chatResponse = await createChatCompletionWithRetryAndReduceHistory(messages, userData.openai);
+    // Send this text to OpenAI's Chat GPT model with retry logic
+    const chatResponse = await createChatCompletionWithRetryReduceHistoryLongtermMemory(
+      messages, 
+      userData.openai,
+      pineconeIndex,
+    );
     console.log(toLogFormat(ctx, `chatGPT response received`));
 
     // save the answer to the database
@@ -808,10 +888,11 @@ async function processTextMessage(ctx: MyContext) {
       throw new Error(`ctx.chat.id or ctx.from.id is undefined`);
     }
 
-    // Send this text to OpenAI's Chat GPT-4 model with retry logic
-    let chatResponse = await createChatCompletionWithRetryAndReduceHistory(
+    // Send this text to OpenAI's Chat GPT model with retry logic
+    let chatResponse = await createChatCompletionWithRetryReduceHistoryLongtermMemory(
       messages, 
       userData.openai,
+      pineconeIndex,
     );
     console.log(toLogFormat(ctx, `chatGPT response received`));
   

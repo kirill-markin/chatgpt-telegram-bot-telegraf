@@ -1,11 +1,11 @@
 {
     "compilerOptions": {
-        "module": "commonjs",
+        "module": "nodenext",
         "esModuleInterop": true,
-        "target": "es6",
+        "target": "es2022",
         "outDir": "dist",
         "strict": true,
-        "moduleResolution": "node"
+        "moduleResolution": "NodeNext"
     },
     "include": ["*.ts"]
 }
