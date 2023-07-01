@@ -12,7 +12,7 @@ tags:
 ## Deploy
 
 1. Copy `.env.example` to `.env` and fill in the values
-2. Play with `settings/private_ru.yaml` file
+2. Play with `settings/private_en.yaml` file
 3. Run `docker-compose up -d`
 
 <!-- 

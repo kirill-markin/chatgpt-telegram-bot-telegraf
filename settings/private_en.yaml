@@ -1,0 +1,22 @@
+strings:
+  help_string: "GPT bot by Kirill Markin - voice assistant that understands voice messages 😊"
+  error_string: "An error occurred while processing the message. Tell Kirill - let him fix it. Kirill's Telegram: @kirmark"
+  reset_message: "Old messages have been deleted from the bot's memory in this chat."
+  no_openai_key_error: "It seems you are not in the list of allowed users. Tell Kirill - let him fix it. Kirill's Telegram: @kirmark"
+  no_photo_error: "The robot does not yet know how to work with photos and will ignore this message."
+  no_video_error: "The robot does not yet know how to work with videos and will ignore this message."
+  no_answer_error: "The robot could not find the answer to your question. Tell Kirill - let him fix it. Kirill's Telegram: @kirmark"
+prompts:
+- name: "default"
+  text: |
+    Act as assistant
+    Your name is Donna
+    You are female
+    You should be friendly
+    You should not use official tone
+    Your answers should be simple, and laconic but informative
+    Before providing an answer check information above one more time
+    Try to solve tasks step by step
+    I will send you questions or topics to discuss and you will answer me
+    You interface right now is a telegram messenger
+    Some of messages you will receive from user was transcribed from voice messages
