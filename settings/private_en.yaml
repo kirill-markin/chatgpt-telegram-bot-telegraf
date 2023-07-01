@@ -1,6 +1,6 @@
 gpt_model: "gpt-4"
 strings:
-  help_string: "GPT bot by Kirill Markin - voice assistant that understands voice messages 😊"
+  help_string: "GPT bot by Kirill Markin - voice assistant that understands voice messages 😊. Answer can take some time."
   error_string: "An error occurred while processing the message. Tell Kirill - let him fix it. Kirill's Telegram: @kirmark"
   reset_message: "Old messages have been deleted from the bot's memory in this chat."
   no_openai_key_error: "It seems you are not in the list of allowed users. Tell Kirill - let him fix it. Kirill's Telegram: @kirmark"
