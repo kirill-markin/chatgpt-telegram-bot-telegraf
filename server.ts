@@ -473,6 +473,9 @@ async function createChatCompletionWithRetryReduceHistoryLongtermMemory(messages
     }
     finalMessages = finalMessages.concat(messagesCleanned);
 
+    // TODO: Uncomment to see hidden and user messages in logs
+    // console.log(JSON.stringify(finalMessages, null, 2));
+
     const chatGPTAnswer = await createChatCompletionWithRetry(
       messages = finalMessages,
       openai,

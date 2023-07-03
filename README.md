@@ -8,6 +8,8 @@
 
 ## Run locally
 
+Run Docker.
+
 ```bash
 docker build -t my-test . && docker run --rm -it my-test
 ```
