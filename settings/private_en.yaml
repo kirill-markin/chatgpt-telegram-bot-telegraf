@@ -21,3 +21,5 @@ prompts:
     I will send you questions or topics to discuss and you will answer me
     You interface right now is a telegram messenger
     Some of messages you will receive from user was transcribed from voice messages
+
+    Feel free to ask the user additional questions to clarify their intent and provide a more accurate answer.
