@@ -111,7 +111,9 @@ const prompts_path = process.env.SETTINGS_PATH || './settings/private_en.yaml';
 const fileContents = fs.readFileSync(prompts_path, 'utf8');
 const bot_settings = yaml.load(fileContents);
 
-const GPT_MODEL = bot_settings.gpt_model || "gpt-3.5-turbo-16k";
+const GPT_MODEL = bot_settings.gpt_model;
+const maxTokensThreshold = 128000;
+const maxLettersThreshold = maxTokensThreshold*1.5;
 const RESET_MESSAGE = bot_settings.strings.reset_message || 'Old messages deleted';
 const NO_OPENAI_KEY_ERROR = bot_settings.strings.no_openai_key_error || 'No OpenAI key provided. Please contact the bot owner.';
 const NO_PHOTO_ERROR = bot_settings.strings.no_photo_error || 'Bot can not process photos.';
@@ -398,7 +400,7 @@ async function createChatCompletionWithRetry(messages: MyMessage[], openai: Open
   }
 }
 
-async function createChatCompletionWithRetryReduceHistoryLongtermMemory(messages: MyMessage[], openai: OpenAIApi, pineconeIndex: any, retries = 5, timeoutMs = timeoutMsDefaultchatGPT): Promise<AxiosResponse<CreateChatCompletionResponse, any> | undefined> {
+async function createChatCompletionWithRetryReduceHistoryLongtermMemory(ctx: MyContext, messages: MyMessage[], openai: OpenAIApi, pineconeIndex: any, retries = 5, timeoutMs = timeoutMsDefaultchatGPT): Promise<AxiosResponse<CreateChatCompletionResponse, any> | undefined> {
   try {
     // Add longterm memory to the messages based on pineconeIndex
 
@@ -445,7 +447,7 @@ async function createChatCompletionWithRetryReduceHistoryLongtermMemory(messages
 
     // lettersThreshold is the approximate limit of tokens for GPT-4 in letters
     const lettersThreshold = 
-      15000 
+      maxLettersThreshold
       - defaultPromptMessageObj.content.length 
       - (referenceMessageObj ? referenceMessageObj.content.length : 0);
 
@@ -465,6 +467,8 @@ async function createChatCompletionWithRetryReduceHistoryLongtermMemory(messages
         }
     
         messagesCleanned = messagesCopy.reverse(); // reverse the messages back to the original order
+        
+        console.log(toLogFormat(ctx, `messages reduced from ${messages.length} to ${messagesCleanned.length}`));
     }
 
     let finalMessages = [defaultPromptMessageObj]
@@ -790,6 +794,7 @@ async function processVoiceMessage(ctx: MyContext) {
 
     // Send this text to OpenAI's Chat GPT model with retry logic
     const chatResponse = await createChatCompletionWithRetryReduceHistoryLongtermMemory(
+      ctx,
       messages, 
       userData.openai,
       pineconeIndex,
@@ -893,6 +898,7 @@ async function processTextMessage(ctx: MyContext) {
 
     // Send this text to OpenAI's Chat GPT model with retry logic
     let chatResponse = await createChatCompletionWithRetryReduceHistoryLongtermMemory(
+      ctx,
       messages, 
       userData.openai,
       pineconeIndex,
