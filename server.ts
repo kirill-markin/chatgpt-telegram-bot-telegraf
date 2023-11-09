@@ -62,6 +62,20 @@ interface Event {
   usage_total_tokens?: number | null;
 }
 
+interface UserSettings {
+  user_id: number;
+  username: string | null;
+  default_language_code: string | null;
+  language_code: string | null;
+  openai_api_key?: string;
+  usage_type?: string;
+}
+
+interface UserData {
+  settings: UserSettings;
+  openai: OpenAIApi;
+};
+
 if (fs.existsSync(".env")) {
   dotenv.config();
 }
@@ -361,7 +375,7 @@ if (defaultPromptMessage) {
 
 // OpenAI functions
 
-async function ensureUserSettingsAndRetrieveOpenAi(ctx: MyContext) {
+async function ensureUserSettingsAndRetrieveOpenAi(ctx: MyContext): Promise<UserData> {
   if (ctx.from && ctx.from.id) {
     const user_id = ctx.from.id;
     let userSettings = await selectUserByUserId(user_id);
@@ -711,6 +725,64 @@ bot.command('reset', (ctx: MyContext) => {
 //   saveCommandToDB(ctx, 'settings');
 // });
 
+async function getUserDataOrReplyWithError(ctx: MyContext): Promise<UserData | null> {
+  try {
+    const userData = await ensureUserSettingsAndRetrieveOpenAi(ctx);
+    return userData;
+  } catch (e) {
+    if (e instanceof NoOpenAiApiKeyError) {
+      await ctx.reply(NO_OPENAI_KEY_ERROR);
+      return null;
+    } else {
+      throw e;
+    }
+  }
+}
+
+async function processUserMessageAndRespond(
+  ctx: MyContext, 
+  messageContent: string, 
+  userData: UserData, 
+  pineconeIndex: any // Replace 'any' with the actual type if you have one
+) {
+  // Save the transcription to the database
+  if (ctx.chat && ctx.chat.id) {
+    await insertMessage({
+      role: "user",
+      content: messageContent,
+      chat_id: ctx.chat.id,
+    });
+  } else {
+    throw new Error(`ctx.chat.id is undefined`);
+  }
+
+  // Download all related messages from the database
+  let messages: MyMessage[] = await selectMessagesByChatIdGPTformat(ctx);
+
+  // Union the user message with messages
+  messages = messages.concat({
+    role: "user",
+    content: messageContent,
+  } as MyMessage);
+
+  // Send this text to OpenAI's Chat GPT model with retry logic
+  const chatResponse: any = await createChatCompletionWithRetryReduceHistoryLongtermMemory(
+    ctx,
+    messages,
+    userData.openai,
+    pineconeIndex,
+  );
+  console.log(toLogFormat(ctx, `chatGPT response received`));
+
+  // Save the answer to the database
+  saveAnswerToDB(chatResponse, ctx);
+
+  // Handle response sending
+  await handleResponseSending(ctx, chatResponse);
+
+  return chatResponse;
+}
+
 async function processVoiceMessage(ctx: MyContext) {
   insertEvent({
     type: 'user_message',
@@ -737,22 +809,13 @@ async function processVoiceMessage(ctx: MyContext) {
   } as Event);
   
   try {
-    let userData = null;
-    try {
-      userData = await ensureUserSettingsAndRetrieveOpenAi(ctx);
-    } catch (e) {
-      if (e instanceof NoOpenAiApiKeyError) {
-        ctx.reply(NO_OPENAI_KEY_ERROR);
-        return;
-      } else {
-        throw e;
-      }
-    }
+    const userData = await getUserDataOrReplyWithError(ctx);
+    if (!userData) return;
+
     const fileId = ctx.message?.voice?.file_id || null;
     if (!fileId) {
       throw new Error(`ctx.message.voice.file_id is undefined`);
     }
-
 
     // download the file
     const url = await ctx.telegram.getFileLink(fileId);
@@ -778,17 +841,6 @@ async function processVoiceMessage(ctx: MyContext) {
     const transcription = await createTranscriptionWithRetry(fs.createReadStream(`./${fileId}.mp3`), userData.openai);
     const transcriptionText = transcription.data.text;
     console.log(toLogFormat(ctx, `voice transcription received`));
-
-    // save the transcription to the database
-    if (ctx.chat && ctx.chat.id) {
-      insertMessage({
-        role: "user",
-        content: transcriptionText,
-        chat_id: ctx.chat.id,
-      });
-    } else {
-      throw new Error(`ctx.chat.id is undefined`);
-    }
 
     // save the transcription event to the database
     insertEvent({
@@ -829,29 +881,7 @@ async function processVoiceMessage(ctx: MyContext) {
     });
     console.log(toLogFormat(ctx, `voice processing finished`));
 
-
-    // download all related messages from the database
-    let messages = await selectMessagesByChatIdGPTformat(ctx);
-
-    // Union the user message with messages
-    messages = messages.concat({
-      role: "user",
-      content: transcriptionText as string,
-    } as MyMessage);
-
-    // Send this text to OpenAI's Chat GPT model with retry logic
-    const chatResponse = await createChatCompletionWithRetryReduceHistoryLongtermMemory(
-      ctx,
-      messages, 
-      userData.openai,
-      pineconeIndex,
-    );
-    console.log(toLogFormat(ctx, `chatGPT response received`));
-
-    // save the answer to the database
-    saveAnswerToDB(chatResponse, ctx);
-
-    await handleResponseSending(ctx, chatResponse);
+    await processUserMessageAndRespond(ctx, transcriptionText, userData, pineconeIndex);
   } catch (e) {
     console.error(toLogFormat(ctx, `[ERROR] error occurred: ${e}`));
     ctx.reply(errorString);
@@ -885,21 +915,9 @@ async function processTextMessage(ctx: MyContext) {
   console.log(toLogFormat(ctx, `new message saved to the database`));
   
   try {
-    let userData = null;
-    try {
-      if (ctx.from && ctx.from.id) {
-        userData = await ensureUserSettingsAndRetrieveOpenAi(ctx);
-      } else {
-        throw new Error(`ctx.from.id is undefined`);
-      }
-    } catch (e) {
-      if (e instanceof NoOpenAiApiKeyError) {
-        ctx.reply(NO_OPENAI_KEY_ERROR);
-        return;
-      } else {
-        throw e;
-      }
-    }
+    const userData = await getUserDataOrReplyWithError(ctx);
+    if (!userData) return;
+
     let userText = null;
     if (ctx.message && ctx.message.text) {
       userText = ctx.message.text;
@@ -907,41 +925,9 @@ async function processTextMessage(ctx: MyContext) {
       throw new Error(`ctx.message.text is undefined`);
     }
 
-    // save the message to the database
-    if (ctx.chat && ctx.chat.id) {
-      insertMessage({
-        role: "user",
-        content: userText,
-        chat_id: ctx.chat.id,
-      });
-    } else {
-      throw new Error(`ctx.chat.id is undefined`);
-    }
+    await processUserMessageAndRespond(ctx, userText, userData, pineconeIndex);
 
-
-    // download all related messages from the database
-    let messages = await selectMessagesByChatIdGPTformat(ctx);
-
-    // Union the user message with messages
-    messages = messages.concat({
-      role: "user",
-      content: userText,
-    } as MyMessage);
-
-    // Send this text to OpenAI's Chat GPT model with retry logic
-    let chatResponse = await createChatCompletionWithRetryReduceHistoryLongtermMemory(
-      ctx,
-      messages, 
-      userData.openai,
-      pineconeIndex,
-    );
-    console.log(toLogFormat(ctx, `chatGPT response received`));
-  
-    // save the answer to the database
-    saveAnswerToDB(chatResponse, ctx);
-
-    await handleResponseSending(ctx, chatResponse);
-  } catch(e) {
+  } catch (e) {
     console.error(toLogFormat(ctx, `[ERROR] error occurred: ${e}`));
     ctx.reply(errorString);
   }
