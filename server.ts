@@ -185,6 +185,18 @@ const createTableQueries = [
   `
 ]
 
+// Create a map to store the message buffers
+
+const messageBuffers = new Map();
+
+function getMessageBufferKey(ctx: MyContext) {
+  if (ctx.chat && ctx.from) {
+    return `${ctx.chat.id}:${ctx.from.id}`;
+  } else {
+    throw new Error('ctx.chat.id or ctx.from.id is undefined');
+  }
+}
+
 // utils
 
 const MAX_MESSAGE_LENGTH = 4096;
@@ -888,7 +900,7 @@ async function processVoiceMessage(ctx: MyContext) {
   }
 }
 
-async function processTextMessage(ctx: MyContext) {
+async function processFullTextMessage(ctx: MyContext, fullMessage: string) {
   insertEvent({
     type: 'user_message',
 
@@ -918,14 +930,7 @@ async function processTextMessage(ctx: MyContext) {
     const userData = await getUserDataOrReplyWithError(ctx);
     if (!userData) return;
 
-    let userText = null;
-    if (ctx.message && ctx.message.text) {
-      userText = ctx.message.text;
-    } else {
-      throw new Error(`ctx.message.text is undefined`);
-    }
-
-    await processUserMessageAndRespond(ctx, userText, userData, pineconeIndex);
+    await processUserMessageAndRespond(ctx, fullMessage, userData, pineconeIndex);
 
   } catch (e) {
     console.error(toLogFormat(ctx, `[ERROR] error occurred: ${e}`));
@@ -1024,7 +1029,26 @@ bot.on(message('voice'), async (ctx: MyContext) => {
 
 bot.on(message('text'), async (ctx: MyContext) => {
   console.log(toLogFormat(ctx, `[NEW] text received`));
-  processTextMessage(ctx);
+  const key = getMessageBufferKey(ctx);
+  const messageData = messageBuffers.get(key) || { messages: [], timer: null };
+
+  messageData.messages.push(ctx.message?.text || '');
+
+  // Clear the old timer
+  if (messageData.timer) {
+    clearTimeout(messageData.timer);
+  }
+
+  // Set a new timer
+  messageData.timer = setTimeout(() => {
+    const fullMessage = messageData.messages?.join('') || '';
+    console.log(toLogFormat(ctx, `full message collected. length: ${fullMessage.length}`));
+    messageData.messages = []; // Clear the messages array
+    processFullTextMessage(ctx, fullMessage);
+  }, 4000);
+
+  // Save the message buffer
+  messageBuffers.set(key, messageData);
 });
 
 bot.launch()
