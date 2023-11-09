@@ -489,7 +489,7 @@ async function createChatCompletionWithRetryReduceHistoryLongtermMemory(ctx: MyC
 
       const queryRequest = {
         vector: embedding,
-        topK: 8,
+        topK: 100,
         includeValues: false,
         includeMetadata: true,
       };
