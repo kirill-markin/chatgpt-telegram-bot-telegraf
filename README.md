@@ -11,5 +11,5 @@
 Run Docker.
 
 ```bash
-docker build -t my-test . && docker run --rm -it my-test
+docker build -t my-test . && docker run --rm -it my-test && docker image rm my-test
 ```
