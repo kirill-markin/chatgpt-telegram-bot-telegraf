@@ -223,7 +223,7 @@ const insertMessage = async ({role, content, chat_id}: MyMessage) => {
   return res.rows[0];
 }
 
-const insertUser = async ({user_id, username, default_language_code, language_code=default_language_code, openai_api_key=null}: User) => {
+const insertUserOrUpdate = async ({user_id, username, default_language_code, language_code=default_language_code, openai_api_key=null}: User) => {
   try {
     const res = await pool.query(`
     INSERT INTO users (user_id, username, default_language_code, language_code, openai_api_key)
@@ -331,19 +331,27 @@ if (defaultPromptMessage) {
 
 // OpenAI functions
 
-async function getUserSettingsAndOpenAiOrCreate(ctx: MyContext) {
+async function ensureUserSettingsAndRetrieveOpenAi(ctx: MyContext) {
   if (ctx.from && ctx.from.id) {
     const user_id = ctx.from.id;
     let userSettings = await selectUserByUserId(user_id);
     if (!userSettings) {
+      // If the user is not found, create new settings
       userSettings = {
         user_id: user_id,
         username: ctx.from?.username || null,
         default_language_code: ctx.from?.language_code || null,
         language_code: ctx.from?.language_code || null,
-      }
-      insertUser(userSettings);
-      console.log(toLogFormat(ctx, `user created in the database`));
+      };
+      await insertUserOrUpdate(userSettings); // Insert the new user
+      console.log(toLogFormat(ctx, "User created in the database"));
+    } else {
+      // If the user is found, update their data
+      userSettings.username = ctx.from?.username || userSettings.username;
+      userSettings.default_language_code = ctx.from?.language_code || userSettings.default_language_code;
+      userSettings.language_code = ctx.from?.language_code || userSettings.language_code;
+      await insertUserOrUpdate(userSettings); // Update the user's data
+      console.log(toLogFormat(ctx, "User data updated in the database"));
     }
 
     // Check if user has openai_api_key or is premium
@@ -635,7 +643,7 @@ const errorString = bot_settings.strings.error_string;
 bot.start((ctx: MyContext) => {
   console.log(toLogFormat(ctx, `/start command received`));
   if (ctx.from && ctx.from.id) {
-    insertUser({
+    insertUserOrUpdate({
       user_id: ctx.from.id,
       username: ctx.from?.username || null,
       default_language_code: ctx.from.language_code,
@@ -701,7 +709,7 @@ async function processVoiceMessage(ctx: MyContext) {
   try {
     let userData = null;
     try {
-      userData = await getUserSettingsAndOpenAiOrCreate(ctx);
+      userData = await ensureUserSettingsAndRetrieveOpenAi(ctx);
     } catch (e) {
       if (e instanceof NoOpenAiApiKeyError) {
         ctx.reply(NO_OPENAI_KEY_ERROR);
@@ -825,7 +833,7 @@ async function processTextMessage(ctx: MyContext) {
     let userData = null;
     try {
       if (ctx.from && ctx.from.id) {
-        userData = await getUserSettingsAndOpenAiOrCreate(ctx);
+        userData = await ensureUserSettingsAndRetrieveOpenAi(ctx);
       } else {
         throw new Error(`ctx.from.id is undefined`);
       }
