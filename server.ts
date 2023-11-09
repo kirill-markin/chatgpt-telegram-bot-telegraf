@@ -8,7 +8,7 @@ import { Context, session, Telegraf } from "telegraf";
 import { message, editedMessage, channelPost, editedChannelPost, callbackQuery } from "telegraf/filters";
 
 import ffmpeg from 'fluent-ffmpeg';
-import { Configuration, OpenAIApi, ChatCompletionRequestMessage, CreateChatCompletionResponse } from 'openai';
+import OpenAI from 'openai';
 
 import { PineconeClient } from "@pinecone-database/pinecone";
 
@@ -20,7 +20,9 @@ interface MyContext extends Context {
 	session?: SessionData;
 }
 
-interface MyMessage extends ChatCompletionRequestMessage{
+interface MyMessage {
+  role: "user" | "assistant";
+  content: string;
   chat_id: number;
 }
 
@@ -73,8 +75,8 @@ interface UserSettings {
 
 interface UserData {
   settings: UserSettings;
-  openai: OpenAIApi;
-};
+  openai: OpenAI;
+}
 
 if (fs.existsSync(".env")) {
   dotenv.config();
@@ -111,10 +113,10 @@ if (
     const pinecone = new PineconeClient();
     pinecone.projectName = process.env.PINECONE_PROJECT_NAME || null;
     await pinecone.init({
-      environment: process.env.PINECONE_ENVIRONMENT,
-      apiKey: process.env.PINECONE_API_KEY,
+      environment: process.env.PINECONE_ENVIRONMENT || '',
+      apiKey: process.env.PINECONE_API_KEY || '',
     });
-    pineconeIndex = pinecone.Index(process.env.PINECONE_INDEX_NAME);
+    pineconeIndex = pinecone.Index(process.env.PINECONE_INDEX_NAME || '');
     console.log('Pinecone database connected');
   })();
 } else {
@@ -216,7 +218,7 @@ async function sendLongMessage(ctx: MyContext, message: string) {
 // Function to handle the response sending logic
 async function handleResponseSending(ctx: MyContext, chatResponse: any) {
   try {
-    let answer = chatResponse?.data?.choices?.[0]?.message?.content ?? NO_ANSWER_ERROR;
+    let answer = chatResponse?.choices?.[0]?.message?.content ?? NO_ANSWER_ERROR;
     
     // Use the utility function to send the answer, whether it's long or short
     await sendLongMessage(ctx, answer);
@@ -421,50 +423,51 @@ async function ensureUserSettingsAndRetrieveOpenAi(ctx: MyContext): Promise<User
       throw new NoOpenAiApiKeyError(`User with user_id ${user_id} has no openai_api_key`);
     }
 
-    const configuration = new Configuration({
+    
+    const openai = new OpenAI({
       apiKey: userSettings.openai_api_key,
     });
-    const openai = new OpenAIApi(configuration);
     return {settings: userSettings, openai: openai}
   } else {
     throw new Error('ctx.from.id is undefined');
   }
 }
 
-async function createChatCompletionWithRetry(messages: MyMessage[], openai: OpenAIApi, retries = 5, timeoutMs = timeoutMsDefaultchatGPT) {
-  for(let i = 0; i < retries; i++) {
+async function createChatCompletionWithRetry(messages: MyMessage[], openai: OpenAI, retries = 5, timeoutMs = timeoutMsDefaultchatGPT) {
+  for (let i = 0; i < retries; i++) {
     try {
       const chatGPTAnswer = await pTimeout(
-        openai.createChatCompletion({
+        openai.chat.completions.create({
           model: GPT_MODEL,
           messages: messages,
           temperature: 0.7,
           // max_tokens: 1000,
         }),
         timeoutMs,
-      )
-        .catch((error) => {
-            throw error;
-        });
+      );
 
-      if (chatGPTAnswer.status !== 200) {
-          throw new Error(`openai.createChatCompletion failed with status ${chatGPTAnswer.status}`);
-      }
-        
+      // Assuming the API does not use a status property in the response to indicate success
       return chatGPTAnswer;
     } catch (error) {
       if (error instanceof pTimeout.TimeoutError) {
-          console.error(`openai.createChatCompletion timed out. Retries left: ${retries - i - 1}`);
+        console.error(`openai.createChatCompletion timed out. Retries left: ${retries - i - 1}`);
+      } else if (error instanceof OpenAI.APIError) {
+        console.error(`openai.createChatCompletion failed. Retries left: ${retries - i - 1}`);
+        console.error(error.status);  // e.g. 401
+        console.error(error.message); // e.g. The authentication token you passed was invalid...
+        console.error(error.code);    // e.g. 'invalid_api_key'
+        console.error(error.type);    // e.g. 'invalid_request_error'
       } else {
-          console.error(`openai.createChatCompletion failed. Retries left: ${retries - i - 1}`);
+        // Non-API and non-timeout error
+        console.error(error);
       }
       
-      if(i === retries - 1) throw error;
+      if (i === retries - 1) throw error;
     }
   }
 }
 
-async function createChatCompletionWithRetryReduceHistoryLongtermMemory(ctx: MyContext, messages: MyMessage[], openai: OpenAIApi, pineconeIndex: any, retries = 5, timeoutMs = timeoutMsDefaultchatGPT): Promise<AxiosResponse<CreateChatCompletionResponse, any> | undefined> {
+async function createChatCompletionWithRetryReduceHistoryLongtermMemory(ctx: MyContext, messages: MyMessage[], openai: OpenAI, pineconeIndex: any, retries = 5, timeoutMs = timeoutMsDefaultchatGPT): Promise<AxiosResponse<OpenAI.Chat.Completions.ChatCompletion, any> | undefined> {
   try {
     // Add longterm memory to the messages based on pineconeIndex
 
@@ -473,16 +476,16 @@ async function createChatCompletionWithRetryReduceHistoryLongtermMemory(ctx: MyC
       // Get embeddings for last user messages
       const lastMessagesThreshold = 4;
       const userMessagesText = messages
-        .filter((message) => message.role === 'user')
+        .filter((message) => message?.role === "user")
         .slice(-lastMessagesThreshold)
         .map((message) => message.content)
         .join('\n');
       // Make the embedding request and return the result
-      const resp = await openai.createEmbedding({
+      const resp = await openai.embeddings.create({
         model: 'text-embedding-ada-002',
         input: userMessagesText,
       })
-      const embedding = resp?.data.data[0].embedding;
+      const embedding = resp?.data?.[0]?.embedding || null;
 
       const queryRequest = {
         vector: embedding,
@@ -512,11 +515,11 @@ async function createChatCompletionWithRetryReduceHistoryLongtermMemory(ctx: MyC
     // lettersThreshold is the approximate limit of tokens for GPT-4 in letters
     const lettersThreshold = 
       maxLettersThreshold
-      - defaultPromptMessageObj.content.length 
+      - (defaultPromptMessageObj?.content?.length || 0)
       - (referenceMessageObj ? referenceMessageObj.content.length : 0);
 
     // Calculate total length of messages and prompt
-    let totalLength = messages.reduce((acc, message) => acc + message.content.length, 0) + defaultPromptMessage.length;
+    let totalLength = messages.reduce((acc, message) => acc + (message?.content?.length || 0), 0) + defaultPromptMessage.length;
     let messagesCleanned;
     if (totalLength <= lettersThreshold) {
         messagesCleanned = [...messages]; // create a copy of messages if totalLength is within limit
@@ -527,7 +530,7 @@ async function createChatCompletionWithRetryReduceHistoryLongtermMemory(ctx: MyC
     
         while (totalLength > lettersThreshold) {
             const message = messagesCopy.pop() as MyMessage; // remove the last message from the copy
-            totalLength -= message.content.length; // recalculate the totalLength
+            totalLength -= (message?.content?.length || 0); // recalculate the totalLength
         }
     
         messagesCleanned = messagesCopy.reverse(); // reverse the messages back to the original order
@@ -550,14 +553,14 @@ async function createChatCompletionWithRetryReduceHistoryLongtermMemory(ctx: MyC
       retries,
       timeoutMs,
     );
-    return chatGPTAnswer as AxiosResponse<CreateChatCompletionResponse, any> | undefined;
+    return chatGPTAnswer as AxiosResponse<OpenAI.Chat.Completions.ChatCompletion, any> | undefined;
   } catch (error) {
     throw error;
   }
 }
 
-function createTranscriptionWithRetry(fileStream: File, openai: OpenAIApi, retries = 3): Promise<any> {
-  return openai.createTranscription(fileStream, "whisper-1")
+function createTranscriptionWithRetry(fileStream: File, openai: OpenAI, retries = 3): Promise<any> {
+  return openai.audio.transcriptions.create({ model: "whisper-1", file: fileStream })
     .catch((error) => {
       if (retries === 0) {
         throw error;
@@ -571,7 +574,7 @@ function createTranscriptionWithRetry(fileStream: File, openai: OpenAIApi, retri
 async function saveAnswerToDB(chatResponse: any, ctx: MyContext) {
   try {
     // save the answer to the database
-    const answer = chatResponse.data.choices[0].message.content;
+    const answer = chatResponse.choices?.[0]?.message?.content || NO_ANSWER_ERROR;
     if (ctx.chat && ctx.chat.id) {
       insertMessage({
         role: "assistant",
@@ -606,7 +609,7 @@ async function saveAnswerToDB(chatResponse: any, ctx: MyContext) {
     } as Event);
     console.log(toLogFormat(ctx, `answer saved to the database. total_tokens: ${chatResponse.data?.usage?.total_tokens || null}`));
   } catch (error) {
-    throw error;
+    console.log(toLogFormat(ctx, `[ERROR] error in saving the answer to the database: ${error}`));
   }
 }
 
@@ -637,7 +640,7 @@ async function saveCommandToDB(ctx: MyContext, command: string) {
     } as Event);
     console.log(toLogFormat(ctx, `command saved to the database`));
   } catch (error) {
-    throw error;
+    console.log(toLogFormat(ctx, `[ERROR] error in saving the command to the database: ${error}`));
   }
 }
 
@@ -851,7 +854,7 @@ async function processVoiceMessage(ctx: MyContext) {
 
     // send the file to the OpenAI API for transcription
     const transcription = await createTranscriptionWithRetry(fs.createReadStream(`./${fileId}.mp3`), userData.openai);
-    const transcriptionText = transcription.data.text;
+    const transcriptionText = transcription.text;
     console.log(toLogFormat(ctx, `voice transcription received`));
 
     // save the transcription event to the database
