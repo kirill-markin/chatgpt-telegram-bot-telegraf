@@ -346,17 +346,17 @@ async function getUserSettingsAndOpenAiOrCreate(ctx: MyContext) {
       console.log(toLogFormat(ctx, `user created in the database`));
     }
 
-    // Check if user is premium
-    if (userSettings.usage_type === "premium") {
+    // Check if user has openai_api_key or is premium
+    if (userSettings.openai_api_key) {
+      console.log(toLogFormat(ctx, `[ACCESS GRANTED] user has custom openai_api_key.`));
+    } else if (userSettings.usage_type === 'premium') {
       userSettings.openai_api_key = process.env.OPENAI_API_KEY;
-      console.log(toLogFormat(ctx, `user is premium, openai_api_key set from .env.`));
+      console.log(toLogFormat(ctx, `[ACCESS GRANTED] user is premium but has no custom openai_api_key. openai_api_key set from environment variable.`));
     } else {
-      console.log(toLogFormat(ctx, `[ACCESS DENIED] user is not premium, openai_api_key not set.`));
-    }
-
-    if (!userSettings.openai_api_key) {
+      console.log(toLogFormat(ctx, `[ACCESS DENIED] user is not premium and has no custom openai_api_key.`));
       throw new NoOpenAiApiKeyError(`User with user_id ${user_id} has no openai_api_key`);
     }
+
     const configuration = new Configuration({
       apiKey: userSettings.openai_api_key,
     });
