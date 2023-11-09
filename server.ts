@@ -753,6 +753,7 @@ async function processVoiceMessage(ctx: MyContext) {
       throw new Error(`ctx.message.voice.file_id is undefined`);
     }
 
+
     // download the file
     const url = await ctx.telegram.getFileLink(fileId);
     const response = await axios({ url: url.toString(), responseType: 'stream' });
@@ -778,15 +779,6 @@ async function processVoiceMessage(ctx: MyContext) {
     const transcriptionText = transcription.data.text;
     console.log(toLogFormat(ctx, `voice transcription received`));
 
-    // download all related messages from the database
-    let messages = await selectMessagesByChatIdGPTformat(ctx);
-
-    // Union the user message with messages
-    messages = messages.concat({
-      role: "user",
-      content: transcriptionText as string,
-    } as MyMessage);
-
     // save the transcription to the database
     if (ctx.chat && ctx.chat.id) {
       insertMessage({
@@ -797,6 +789,8 @@ async function processVoiceMessage(ctx: MyContext) {
     } else {
       throw new Error(`ctx.chat.id is undefined`);
     }
+
+    // save the transcription event to the database
     insertEvent({
       type: 'model_transcription',
 
@@ -822,6 +816,29 @@ async function processVoiceMessage(ctx: MyContext) {
     } as Event);
     console.log(toLogFormat(ctx, `new voice transcription saved to the database`));
 
+    // Delete both audio files
+    fs.unlink(`./${fileId}.oga`, (err) => {
+      if (err) {
+        console.error(err);
+      }
+    });
+    fs.unlink(`./${fileId}.mp3`, (err) => {
+      if (err) {
+        console.error(err);
+      }
+    });
+    console.log(toLogFormat(ctx, `voice processing finished`));
+
+
+    // download all related messages from the database
+    let messages = await selectMessagesByChatIdGPTformat(ctx);
+
+    // Union the user message with messages
+    messages = messages.concat({
+      role: "user",
+      content: transcriptionText as string,
+    } as MyMessage);
+
     // Send this text to OpenAI's Chat GPT model with retry logic
     const chatResponse = await createChatCompletionWithRetryReduceHistoryLongtermMemory(
       ctx,
@@ -835,19 +852,6 @@ async function processVoiceMessage(ctx: MyContext) {
     saveAnswerToDB(chatResponse, ctx);
 
     await handleResponseSending(ctx, chatResponse);
-    
-    // Delete both files
-    fs.unlink(`./${fileId}.oga`, (err) => {
-      if (err) {
-        console.error(err);
-      }
-    });
-    fs.unlink(`./${fileId}.mp3`, (err) => {
-      if (err) {
-        console.error(err);
-      }
-    });
-    console.log(toLogFormat(ctx, `voice processing finished`));
   } catch (e) {
     console.error(toLogFormat(ctx, `[ERROR] error occurred: ${e}`));
     ctx.reply(errorString);
@@ -855,6 +859,31 @@ async function processVoiceMessage(ctx: MyContext) {
 }
 
 async function processTextMessage(ctx: MyContext) {
+  insertEvent({
+    type: 'user_message',
+
+    user_id: ctx.from?.id || null,
+    user_is_bot: ctx.from?.is_bot || null,
+    user_language_code: ctx.from?.language_code || null,
+    user_username: ctx.from?.username || null,
+
+    chat_id: ctx.chat?.id || null,
+    chat_type: ctx.chat?.type || null,
+
+    message_role: "user",
+    messages_type: "text",
+    message_voice_duration: null,
+    message_command: null,
+    content_length: null,
+
+    usage_model: null,
+    usage_object: null,
+    usage_completion_tokens: null,
+    usage_prompt_tokens: null,
+    usage_total_tokens: null,
+  } as Event);
+  console.log(toLogFormat(ctx, `new message saved to the database`));
+  
   try {
     let userData = null;
     try {
@@ -878,15 +907,6 @@ async function processTextMessage(ctx: MyContext) {
       throw new Error(`ctx.message.text is undefined`);
     }
 
-    // download all related messages from the database
-    let messages = await selectMessagesByChatIdGPTformat(ctx);
-
-    // Union the user message with messages
-    messages = messages.concat({
-      role: "user",
-      content: userText,
-    } as MyMessage);
-
     // save the message to the database
     if (ctx.chat && ctx.chat.id) {
       insertMessage({
@@ -897,30 +917,16 @@ async function processTextMessage(ctx: MyContext) {
     } else {
       throw new Error(`ctx.chat.id is undefined`);
     }
-    insertEvent({
-      type: 'user_message',
 
-      user_id: ctx.from?.id || null,
-      user_is_bot: ctx.from?.is_bot || null,
-      user_language_code: ctx.from?.language_code || null,
-      user_username: ctx.from?.username || null,
 
-      chat_id: ctx.chat?.id || null,
-      chat_type: ctx.chat?.type || null,
+    // download all related messages from the database
+    let messages = await selectMessagesByChatIdGPTformat(ctx);
 
-      message_role: "user",
-      messages_type: "text",
-      message_voice_duration: null,
-      message_command: null,
-      content_length: null,
-
-      usage_model: null,
-      usage_object: null,
-      usage_completion_tokens: null,
-      usage_prompt_tokens: null,
-      usage_total_tokens: null,
-    } as Event);
-    console.log(toLogFormat(ctx, `new message saved to the database`));
+    // Union the user message with messages
+    messages = messages.concat({
+      role: "user",
+      content: userText,
+    } as MyMessage);
 
     // Send this text to OpenAI's Chat GPT model with retry logic
     let chatResponse = await createChatCompletionWithRetryReduceHistoryLongtermMemory(
@@ -935,7 +941,6 @@ async function processTextMessage(ctx: MyContext) {
     saveAnswerToDB(chatResponse, ctx);
 
     await handleResponseSending(ctx, chatResponse);
-    
   } catch(e) {
     console.error(toLogFormat(ctx, `[ERROR] error occurred: ${e}`));
     ctx.reply(errorString);
