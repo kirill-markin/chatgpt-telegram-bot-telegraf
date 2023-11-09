@@ -601,13 +601,13 @@ async function saveAnswerToDB(chatResponse: any, ctx: MyContext) {
       message_command: null,
       content_length: answer.length,
 
-      usage_model: chatResponse.data?.model || null,
-      usage_object: chatResponse.data?.object || null,
-      usage_completion_tokens: chatResponse.data?.usage?.completion_tokens || null,
-      usage_prompt_tokens: chatResponse.data?.usage?.prompt_tokens || null,
-      usage_total_tokens: chatResponse.data?.usage?.total_tokens || null,
+      usage_model: chatResponse.model || null,
+      usage_object: chatResponse.object || null,
+      usage_completion_tokens: chatResponse.usage?.completion_tokens || null,
+      usage_prompt_tokens: chatResponse.usage?.prompt_tokens || null,
+      usage_total_tokens: chatResponse.usage?.total_tokens || null,
     } as Event);
-    console.log(toLogFormat(ctx, `answer saved to the database. total_tokens: ${chatResponse.data?.usage?.total_tokens || null}`));
+    console.log(toLogFormat(ctx, `answer saved to the database. total_tokens: ${chatResponse.usage?.total_tokens || null}`));
   } catch (error) {
     console.log(toLogFormat(ctx, `[ERROR] error in saving the answer to the database: ${error}`));
   }
