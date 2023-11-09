@@ -173,6 +173,36 @@ const createTableQueries = [
 
 // utils
 
+const MAX_MESSAGE_LENGTH = 4096;
+
+// Utility function to send long messages
+async function sendLongMessage(ctx: MyContext, message: string) {
+  if (message.length > MAX_MESSAGE_LENGTH) {
+    for (let i = 0; i < message.length; i += MAX_MESSAGE_LENGTH) {
+      const messagePart = message.substring(i, i + MAX_MESSAGE_LENGTH);
+      await ctx.reply(messagePart);
+    }
+  } else {
+    await ctx.reply(message);
+  }
+}
+
+// Function to handle the response sending logic
+async function handleResponseSending(ctx: MyContext, chatResponse: any) {
+  try {
+    let answer = chatResponse?.data?.choices?.[0]?.message?.content ?? NO_ANSWER_ERROR;
+    
+    // Use the utility function to send the answer, whether it's long or short
+    await sendLongMessage(ctx, answer);
+  
+    console.log(toLogFormat(ctx, 'answer sent to the user'));
+  } catch (e) {
+    console.error(toLogFormat(ctx, `[ERROR] error in sending the answer to the user: ${e}`));
+    // Use the utility function to inform the user of an error in a standardized way
+    await sendLongMessage(ctx, "An error occurred while processing your request. Please try again later.");
+  }
+}
+
 const toLogFormat = (ctx: MyContext, logMessage: string) => {
   const chat_id = ctx.chat?.id;
   const username = ctx.from?.username || ctx.from?.id;
@@ -804,12 +834,8 @@ async function processVoiceMessage(ctx: MyContext) {
     // save the answer to the database
     saveAnswerToDB(chatResponse, ctx);
 
-    // send the answer to the user
-    let answer = chatResponse?.data?.choices?.[0]?.message?.content ?? NO_ANSWER_ERROR;
+    await handleResponseSending(ctx, chatResponse);
     
-    ctx.reply(answer);
-    console.log(toLogFormat(ctx, `answer sent to the user`));
-
     // Delete both files
     fs.unlink(`./${fileId}.oga`, (err) => {
       if (err) {
@@ -908,11 +934,8 @@ async function processTextMessage(ctx: MyContext) {
     // save the answer to the database
     saveAnswerToDB(chatResponse, ctx);
 
-    // send the answer to the user
-    let answer = chatResponse?.data?.choices?.[0]?.message?.content ?? NO_ANSWER_ERROR;
+    await handleResponseSending(ctx, chatResponse);
     
-    ctx.reply(answer);
-    console.log(toLogFormat(ctx, `answer sent to the user`));
   } catch(e) {
     console.error(toLogFormat(ctx, `[ERROR] error occurred: ${e}`));
     ctx.reply(errorString);
