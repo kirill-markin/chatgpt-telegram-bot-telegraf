@@ -2,7 +2,8 @@ import dotenv from "dotenv";
 import fs from "fs";
 import axios, { AxiosResponse } from 'axios';
 import pTimeout from 'p-timeout';
-import yaml from 'js-yaml';
+
+import yaml from 'yaml'
 
 import { Context, session, Telegraf } from "telegraf";
 import { message, editedMessage, channelPost, editedChannelPost, callbackQuery } from "telegraf/filters";
@@ -127,7 +128,7 @@ if (
 
 const prompts_path = process.env.SETTINGS_PATH || './settings/private_en.yaml';
 const fileContents = fs.readFileSync(prompts_path, 'utf8');
-const bot_settings = yaml.load(fileContents);
+const bot_settings = yaml.parse(fileContents);
 
 const GPT_MODEL = bot_settings.gpt_model;
 const maxTokensThreshold = 128000;
