@@ -1068,7 +1068,7 @@ bot.on(message('text'), async (ctx: MyContext) => {
 
   // Set a new timer
   messageData.timer = setTimeout(() => {
-    const fullMessage = messageData.messages?.join('') || '';
+    const fullMessage = messageData.messages?.join('\n') || '';
     console.log(toLogFormat(ctx, `full message collected. length: ${fullMessage.length}`));
     messageData.messages = []; // Clear the messages array
     processFullTextMessage(ctx, fullMessage);
