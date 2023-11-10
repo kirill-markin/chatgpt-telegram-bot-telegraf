@@ -804,12 +804,6 @@ async function processUserMessageAndRespond(
   // Download all related messages from the database
   let messages: MyMessage[] = await selectMessagesByChatIdGPTformat(ctx);
 
-  // Union the user message with messages
-  messages = messages.concat({
-    role: "user",
-    content: messageContent,
-  } as MyMessage);
-
   // Send this text to OpenAI's Chat GPT model with retry logic
   const chatResponse: any = await createChatCompletionWithRetryReduceHistoryLongtermMemory(
     ctx,
