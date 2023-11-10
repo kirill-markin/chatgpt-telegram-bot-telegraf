@@ -10,6 +10,8 @@ import { message, editedMessage, channelPost, editedChannelPost, callbackQuery }
 import ffmpeg from 'fluent-ffmpeg';
 import OpenAI from 'openai';
 
+import { encoding_for_model } from 'tiktoken';
+
 import { PineconeClient } from "@pinecone-database/pinecone";
 
 interface SessionData {
@@ -129,7 +131,8 @@ const bot_settings = yaml.load(fileContents);
 
 const GPT_MODEL = bot_settings.gpt_model;
 const maxTokensThreshold = 128000;
-const maxLettersThreshold = maxTokensThreshold*1.5;
+const averageAnswerTokens = 8000;
+const maxTokensThresholdToReduceHistory = maxTokensThreshold - averageAnswerTokens;
 const RESET_MESSAGE = bot_settings.strings.reset_message || 'Old messages deleted';
 const NO_OPENAI_KEY_ERROR = bot_settings.strings.no_openai_key_error || 'No OpenAI key provided. Please contact the bot owner.';
 const NO_PHOTO_ERROR = bot_settings.strings.no_photo_error || 'Bot can not process photos.';
@@ -510,39 +513,66 @@ async function createChatCompletionWithRetryReduceHistoryLongtermMemory(ctx: MyC
     }
 
 
-    // Reduce history
+    // Reduce history using tokens, but consider defaultPrompt and referenceMessage lengths
 
-    // lettersThreshold is the approximate limit of tokens for GPT-4 in letters
-    const lettersThreshold = 
-      maxLettersThreshold
-      - (defaultPromptMessageObj?.content?.length || 0)
-      - (referenceMessageObj ? referenceMessageObj.content.length : 0);
+    const encoder = encoding_for_model('gpt-3.5-turbo'); // or 'gpt-4' if it's available
 
-    // Calculate total length of messages and prompt
-    let totalLength = messages.reduce((acc, message) => acc + (message?.content?.length || 0), 0) + defaultPromptMessage.length;
-    let messagesCleanned;
-    if (totalLength <= lettersThreshold) {
-        messagesCleanned = [...messages]; // create a copy of messages if totalLength is within limit
-    } else {
-        // If totalLength exceeds the limit, create a subset of messages
-        const messagesCopy = [...messages].reverse(); // create a reversed copy of messages
-        messagesCleanned = [];
-    
-        while (totalLength > lettersThreshold) {
-            const message = messagesCopy.pop() as MyMessage; // remove the last message from the copy
-            totalLength -= (message?.content?.length || 0); // recalculate the totalLength
-        }
-    
-        messagesCleanned = messagesCopy.reverse(); // reverse the messages back to the original order
-        
-        console.log(toLogFormat(ctx, `messages reduced from ${messages.length} to ${messagesCleanned.length}`));
+    // Define your token threshold here
+    const tokenThreshold = maxTokensThresholdToReduceHistory;
+    let totalTokenCount = 0;
+
+    // Tokenize and account for default prompt and reference message
+    const defaultPromptTokens = defaultPromptMessageObj ? encoder.encode(defaultPromptMessageObj.content) : [];
+    const referenceMessageTokens = referenceMessageObj ? encoder.encode(referenceMessageObj.content) : [];
+
+    // Adjust tokenThreshold to account for the default prompt and reference message
+    const adjustedTokenThreshold = tokenThreshold - defaultPromptTokens.length - referenceMessageTokens.length;
+
+    // Check if adjustedTokenThreshold is valid
+    if (adjustedTokenThreshold <= 0) {
+      encoder.free(); // Free the encoder before throwing error
+      throw new Error('Token threshold exceeded by default prompt and reference message. Max token threshold: ' + tokenThreshold + ', default prompt length: ' + defaultPromptTokens.length + ', reference message length: ' + referenceMessageTokens.length);
     }
+
+    // Tokenize messages and calculate total token count
+    let messagesCleaned = messages.reduceRight<MyMessage[]>((acc, message) => {
+      const tokens = encoder.encode(message.content);
+      if (totalTokenCount + tokens.length <= adjustedTokenThreshold) {
+        acc.unshift(message); // Prepend to keep the original order
+        totalTokenCount += tokens.length;
+      } else {
+        // When we can't add the entire message, we need to add a truncated part of it
+        const tokensAvailable = adjustedTokenThreshold - totalTokenCount;
+        if (tokensAvailable > 0) {
+          // We can include a part of this message
+          // Take tokens from the end instead of the start
+          const partialTokens = tokens.slice(-tokensAvailable);
+          const partialContentArray = encoder.decode(partialTokens);
+          // Convert Uint8Array to string
+          const partialContent = new TextDecoder().decode(partialContentArray);
+          acc.unshift({ ...message, content: partialContent });
+          totalTokenCount += tokensAvailable; // This should now equal adjustedTokenThreshold
+        }
+        // Once we've hit the token limit, we don't add any more messages
+        return acc;
+      }
+      return acc;
+    }, []);
+
+    if (messages.length !== messagesCleaned.length) {  
+      console.log(toLogFormat(ctx, `messages reduced, totalTokenCount: ${totalTokenCount} from adjustedTokenThreshold: ${adjustedTokenThreshold}. Original message count: ${messages.length}, reduced message count: ${messagesCleaned.length}.`));
+    } else {
+      console.log(toLogFormat(ctx, `messages not reduced, totalTokenCount: ${totalTokenCount} from adjustedTokenThreshold: ${adjustedTokenThreshold}.`));
+    }
+
+    encoder.free(); // Free the encoder when done
+
 
     let finalMessages = [defaultPromptMessageObj]
     if (referenceMessageObj) {
       finalMessages.push(referenceMessageObj);
     }
-    finalMessages = finalMessages.concat(messagesCleanned);
+    finalMessages = finalMessages.concat(messagesCleaned);
 
     // TODO: Uncomment to see hidden and user messages in logs
     // console.log(JSON.stringify(finalMessages, null, 2));

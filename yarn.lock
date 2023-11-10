@@ -214,9 +214,9 @@
   "version" "0.4.0"
 
 "axios@^1.4.0":
-  "integrity" "sha512-S4XCWMEmzvo64T9GfvQDOXgYRDJ/wsSZc7Jvdgx5u1sd0JwsuPLqb3SYmusag+edF6ziyMensPVqLTSc1PiSEA=="
-  "resolved" "https://registry.npmjs.org/axios/-/axios-1.4.0.tgz"
-  "version" "1.4.0"
+  "integrity" "sha512-vfBmhDpKafglh0EldBEbVuoe7DyAavGSLWhuSm5ZSEKQnHhBf0xAAwybbNH1IkrJNGnS/VG4I5yxig1pCEXE4g=="
+  "resolved" "https://registry.npmjs.org/axios/-/axios-1.6.1.tgz"
+  "version" "1.6.1"
   dependencies:
     "follow-redirects" "^1.15.0"
     "form-data" "^4.0.0"
@@ -1006,6 +1006,11 @@
     "safe-compare" "^1.1.4"
     "sandwich-stream" "^2.0.2"
     "typegram" "^4.3.0"
+
+"tiktoken@^1.0.10":
+  "integrity" "sha512-gF8ndTCNu7WcRFbl1UUWaFIB4CTXmHzS3tRYdyUYF7x3C6YR6Evoao4zhKDmWIwv2PzNbzoQMV8Pxt+17lEDbA=="
+  "resolved" "https://registry.npmjs.org/tiktoken/-/tiktoken-1.0.10.tgz"
+  "version" "1.0.10"
 
 "toidentifier@1.0.1":
   "integrity" "sha512-o5sSPKEkg/DIQNmH43V0/uerLrpzVedkUh8tGNvaeXpfpuwjKenlSox/2O/BTlZUtEe+JG7s5YhEz608PlAHRA=="
