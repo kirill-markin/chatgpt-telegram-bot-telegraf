@@ -133,14 +133,16 @@ const fileContents = fs.readFileSync(prompts_path, 'utf8');
 const bot_settings = yaml.parse(fileContents);
 
 const GPT_MODEL = bot_settings.gpt_model;
-const maxTokensThreshold = 128000;
-const averageAnswerTokens = 8000;
+const maxTokensThreshold = 128_000;
+const averageAnswerTokens = 8_000;
 const maxTokensThresholdToReduceHistory = maxTokensThreshold - averageAnswerTokens;
 const RESET_MESSAGE = bot_settings.strings.reset_message || 'Old messages deleted';
 const NO_OPENAI_KEY_ERROR = bot_settings.strings.no_openai_key_error || 'No OpenAI key provided. Please contact the bot owner.';
 const NO_PHOTO_ERROR = bot_settings.strings.no_photo_error || 'Bot can not process photos.';
 const NO_VIDEO_ERROR = bot_settings.strings.no_video_error || 'Bot can not process videos.';
 const NO_ANSWER_ERROR = bot_settings.strings.no_answer_error || 'Bot can not answer to this message.';
+
+const maxTrialsTokens = bot_settings.max_trials_tokens || 200_000;
 
 // Create needed tables if not exists
 
@@ -267,6 +269,11 @@ class NoOpenAiApiKeyError extends Error {
 
 
 // Database functions
+
+const usedTokensForUser = async (user_id: number): Promise<number> => {
+  const res = await pool.query('SELECT SUM(usage_total_tokens) FROM events WHERE user_id = $1', [user_id]);
+  return res.rows[0].sum || 1_000_000_000_000_000;
+};
 
 const selectMessagesByChatIdGPTformat = async (ctx: MyContext) => {
   if (ctx.chat && ctx.chat.id) {
@@ -431,14 +438,20 @@ async function ensureUserSettingsAndRetrieveOpenAi(ctx: MyContext): Promise<User
     }
 
     // Check if user has openai_api_key or is premium
-    if (userSettings.openai_api_key) {
+    if (userSettings.openai_api_key) { // custom api key
       console.log(toLogFormat(ctx, `[ACCESS GRANTED] user has custom openai_api_key.`));
-    } else if (userSettings.usage_type === 'premium') {
+    } else if (userSettings.usage_type === 'premium') { // premium user
       userSettings.openai_api_key = process.env.OPENAI_API_KEY;
       console.log(toLogFormat(ctx, `[ACCESS GRANTED] user is premium but has no custom openai_api_key. openai_api_key set from environment variable.`));
-    } else {
-      console.log(toLogFormat(ctx, `[ACCESS DENIED] user is not premium and has no custom openai_api_key.`));
-      throw new NoOpenAiApiKeyError(`User with user_id ${user_id} has no openai_api_key`);
+    } else { // no access or trial
+      const usedTokens = await usedTokensForUser(user_id);
+      if (usedTokens < maxTrialsTokens) {
+        userSettings.openai_api_key = process.env.OPENAI_API_KEY;
+        console.log(toLogFormat(ctx, `[ACCESS GRANTED] user is trial and user did not exceed the message limit. User used tokens: ${usedTokens} out of ${maxTrialsTokens}. openai_api_key set from environment variable.`));
+      } else {
+        console.log(toLogFormat(ctx, `[ACCESS DENIED] user is not premium and has no custom openai_api_key and exceeded the message limit. User used tokens: ${usedTokens} out of ${maxTrialsTokens}.`));
+        throw new NoOpenAiApiKeyError(`User with user_id ${user_id} has no openai_api_key`);
+      }
     }
 
     
