@@ -41,6 +41,7 @@ interface User {
   default_language_code: string;
   language_code?: string | null;
   openai_api_key?: string | null;
+  usage_type?: string | null;
 }
 
 interface Event {
@@ -138,6 +139,7 @@ const averageAnswerTokens = 8_000;
 const maxTokensThresholdToReduceHistory = maxTokensThreshold - averageAnswerTokens;
 const RESET_MESSAGE = bot_settings.strings.reset_message || 'Old messages deleted';
 const NO_OPENAI_KEY_ERROR = bot_settings.strings.no_openai_key_error || 'No OpenAI key provided. Please contact the bot owner.';
+const TRIAL_ENDED_ERROR = bot_settings.strings.trial_ended_error || 'Trial period ended. Please contact the bot owner.';
 const NO_PHOTO_ERROR = bot_settings.strings.no_photo_error || 'Bot can not process photos.';
 const NO_VIDEO_ERROR = bot_settings.strings.no_video_error || 'Bot can not process videos.';
 const NO_ANSWER_ERROR = bot_settings.strings.no_answer_error || 'Bot can not answer to this message.';
@@ -299,19 +301,20 @@ const insertMessage = async ({role, content, chat_id, user_id}: MyMessage) => {
   return res.rows[0];
 }
 
-const insertUserOrUpdate = async ({user_id, username, default_language_code, language_code=default_language_code, openai_api_key=null}: User) => {
+const insertUserOrUpdate = async ({user_id, username, default_language_code, language_code=default_language_code, openai_api_key=null, usage_type}: User) => {
   try {
     const res = await pool.query(`
-    INSERT INTO users (user_id, username, default_language_code, language_code, openai_api_key, created_at)
-    VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
+    INSERT INTO users (user_id, username, default_language_code, language_code, openai_api_key, usage_type, created_at)
+    VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)
     ON CONFLICT (user_id) DO UPDATE SET
       username = EXCLUDED.username,
       default_language_code = EXCLUDED.default_language_code,
       language_code = EXCLUDED.language_code,
       openai_api_key = EXCLUDED.openai_api_key,
+      usage_type = EXCLUDED.usage_type,
       created_at = COALESCE(users.created_at, EXCLUDED.created_at)
     RETURNING *;
-  `, [user_id, username, default_language_code, language_code, openai_api_key]);
+  `, [user_id, username, default_language_code, language_code, openai_api_key, usage_type]);
   return res.rows[0];
   } catch (error) {
     throw error;
@@ -446,9 +449,13 @@ async function ensureUserSettingsAndRetrieveOpenAi(ctx: MyContext): Promise<User
     } else { // no access or trial
       const usedTokens = await usedTokensForUser(user_id);
       if (usedTokens < maxTrialsTokens) {
+        userSettings.usage_type = 'trial_active';
+        await insertUserOrUpdate(userSettings);
         userSettings.openai_api_key = process.env.OPENAI_API_KEY;
         console.log(toLogFormat(ctx, `[ACCESS GRANTED] user is trial and user did not exceed the message limit. User used tokens: ${usedTokens} out of ${maxTrialsTokens}. openai_api_key set from environment variable.`));
       } else {
+        userSettings.usage_type = 'trial_ended';
+        await insertUserOrUpdate(userSettings);
         console.log(toLogFormat(ctx, `[ACCESS DENIED] user is not premium and has no custom openai_api_key and exceeded the message limit. User used tokens: ${usedTokens} out of ${maxTrialsTokens}.`));
         throw new NoOpenAiApiKeyError(`User with user_id ${user_id} has no openai_api_key`);
       }
@@ -807,7 +814,7 @@ async function getUserDataOrReplyWithError(ctx: MyContext): Promise<UserData | n
     return userData;
   } catch (e) {
     if (e instanceof NoOpenAiApiKeyError) {
-      await ctx.reply(NO_OPENAI_KEY_ERROR);
+      await ctx.reply(TRIAL_ENDED_ERROR);
       return null;
     } else {
       throw e;
