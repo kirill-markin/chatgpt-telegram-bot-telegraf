@@ -26,7 +26,8 @@ interface MyContext extends Context {
 interface MyMessage {
   role: "user" | "assistant";
   content: string;
-  chat_id: number;
+  chat_id: number | null;
+  user_id: number | null;
 }
 
 interface Prompt {
@@ -65,6 +66,7 @@ interface Event {
   usage_completion_tokens?: number | null;
   usage_prompt_tokens?: number | null;
   usage_total_tokens?: number | null;
+  api_key?: string | null;
 }
 
 interface UserSettings {
@@ -144,14 +146,6 @@ const NO_ANSWER_ERROR = bot_settings.strings.no_answer_error || 'Bot can not ans
 
 const createTableQueries = [
   `
-  CREATE TABLE IF NOT EXISTS messages (
-    id SERIAL PRIMARY KEY,
-    role VARCHAR(255) NOT NULL,
-    content TEXT NOT NULL,
-    chat_id bigint NOT NULL
-  );
-  `,
-  `
   CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
     user_id bigint UNIQUE NOT NULL,
@@ -159,7 +153,19 @@ const createTableQueries = [
     default_language_code VARCHAR(255),
     language_code VARCHAR(255),
     openai_api_key VARCHAR(255),
-    usage_type VARCHAR(255) DEFAULT NULL
+    usage_type VARCHAR(255) DEFAULT NULL,
+    created_at TIMESTAMP
+  );
+  `,
+  `
+  CREATE TABLE IF NOT EXISTS messages (
+    id SERIAL PRIMARY KEY,
+    role VARCHAR(255) NOT NULL,
+    content TEXT NOT NULL,
+    chat_id bigint NOT NULL,
+    is_active BOOLEAN DEFAULT TRUE,
+    user_id bigint REFERENCES users(id),
+    time TIMESTAMP
   );
   `,
   `
@@ -167,15 +173,15 @@ const createTableQueries = [
     id SERIAL PRIMARY KEY,
     time TIMESTAMP NOT NULL,
     type VARCHAR(255) NOT NULL,
-
+  
     user_id bigint,
     user_is_bot BOOLEAN,
     user_language_code VARCHAR(255),
     user_username VARCHAR(255),
-
+  
     chat_id bigint,
     chat_type VARCHAR(255),
-
+  
     message_role VARCHAR(255),
     messages_type VARCHAR(255),
     message_voice_duration INT,
@@ -186,7 +192,8 @@ const createTableQueries = [
     usage_object VARCHAR(255),
     usage_completion_tokens INT,
     usage_prompt_tokens INT,
-    usage_total_tokens INT
+    usage_total_tokens INT,
+    api_key VARCHAR(255)
   );
   `
 ]
@@ -263,7 +270,7 @@ class NoOpenAiApiKeyError extends Error {
 
 const selectMessagesByChatIdGPTformat = async (ctx: MyContext) => {
   if (ctx.chat && ctx.chat.id) {
-    const res = await pool.query('SELECT role, content FROM messages WHERE chat_id = $1 ORDER BY id', [ctx.chat.id]);
+    const res = await pool.query('SELECT role, content FROM messages WHERE chat_id = $1 AND is_active = TRUE ORDER BY id', [ctx.chat.id]);
     console.log(toLogFormat(ctx, `messages received from the database: ${res.rows.length}`));
     return res.rows as MyMessage[];
   } else {
@@ -276,25 +283,26 @@ const selectUserByUserId = async (user_id: number) => {
   return res.rows[0];
 }
 
-const insertMessage = async ({role, content, chat_id}: MyMessage) => {
+const insertMessage = async ({role, content, chat_id, user_id}: MyMessage) => {
   const res = await pool.query(`
-    INSERT INTO messages (role, content, chat_id)
-    VALUES ($1, $2, $3)
+    INSERT INTO messages (role, content, chat_id, time, user_id)
+    VALUES ($1, $2, $3, CURRENT_TIMESTAMP, (SELECT id FROM users WHERE user_id = $4))
     RETURNING *;
-  `, [role, content, chat_id]);
+  `, [role, content, chat_id, user_id]);
   return res.rows[0];
 }
 
 const insertUserOrUpdate = async ({user_id, username, default_language_code, language_code=default_language_code, openai_api_key=null}: User) => {
   try {
     const res = await pool.query(`
-    INSERT INTO users (user_id, username, default_language_code, language_code, openai_api_key)
-    VALUES ($1, $2, $3, $4, $5)
+    INSERT INTO users (user_id, username, default_language_code, language_code, openai_api_key, created_at)
+    VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
     ON CONFLICT (user_id) DO UPDATE SET
-      username = $2,
-      default_language_code = $3,
-      language_code = $4,
-      openai_api_key = $5
+      username = EXCLUDED.username,
+      default_language_code = EXCLUDED.default_language_code,
+      language_code = EXCLUDED.language_code,
+      openai_api_key = EXCLUDED.openai_api_key,
+      created_at = COALESCE(users.created_at, EXCLUDED.created_at)
     RETURNING *;
   `, [user_id, username, default_language_code, language_code, openai_api_key]);
   return res.rows[0];
@@ -302,7 +310,6 @@ const insertUserOrUpdate = async ({user_id, username, default_language_code, lan
     throw error;
   }
 }
-
 const insertEvent = async (event: Event) => {
   event.time = new Date();
   try {
@@ -329,14 +336,15 @@ const insertEvent = async (event: Event) => {
         usage_object,
         usage_completion_tokens,
         usage_prompt_tokens,
-        usage_total_tokens
+        usage_total_tokens,
+        api_key
       )
       VALUES (
         $1, $2,
         $3, $4, $5, $6,
         $7, $8,
         $9, $10, $11, $12, $13,
-        $14, $15, $16, $17, $18
+        $14, $15, $16, $17, $18, $19
       )
       RETURNING *;
     `, [
@@ -361,7 +369,8 @@ const insertEvent = async (event: Event) => {
       event.usage_object,
       event.usage_completion_tokens,
       event.usage_prompt_tokens,
-      event.usage_total_tokens
+      event.usage_total_tokens,
+      event.api_key,
     ]);
     return res.rows[0];
   } catch (error) {
@@ -372,6 +381,11 @@ const insertEvent = async (event: Event) => {
 
 const deleteMessagesByChatId = async (chat_id: number) => {
   const res = await pool.query('DELETE FROM messages WHERE chat_id = $1', [chat_id]);
+  return res;
+}
+
+const deactivateMessagesByChatId = async (chat_id: number) => {
+  const res = await pool.query('UPDATE messages SET is_active = FALSE WHERE chat_id = $1', [chat_id]);
   return res;
 }
 
@@ -493,7 +507,7 @@ async function createChatCompletionWithRetryReduceHistoryLongtermMemory(ctx: MyC
 
       const queryRequest = {
         vector: embedding,
-        topK: 100,
+        topK: 50,
         includeValues: false,
         includeMetadata: true,
       };
@@ -602,7 +616,7 @@ function createTranscriptionWithRetry(fileStream: File, openai: OpenAI, retries 
 }
 
 // Save answer to the database to all tables
-async function saveAnswerToDB(chatResponse: any, ctx: MyContext) {
+async function saveAnswerToDB(chatResponse: any, ctx: MyContext, userData: UserData) {
   try {
     // save the answer to the database
     const answer = chatResponse.choices?.[0]?.message?.content || NO_ANSWER_ERROR;
@@ -611,6 +625,7 @@ async function saveAnswerToDB(chatResponse: any, ctx: MyContext) {
         role: "assistant",
         content: answer,
         chat_id: ctx.chat.id,
+        user_id: null,
         });
     } else {
       throw new Error(`ctx.chat.id is undefined`);
@@ -637,6 +652,7 @@ async function saveAnswerToDB(chatResponse: any, ctx: MyContext) {
       usage_completion_tokens: chatResponse.usage?.completion_tokens || null,
       usage_prompt_tokens: chatResponse.usage?.prompt_tokens || null,
       usage_total_tokens: chatResponse.usage?.total_tokens || null,
+      api_key: userData.openai.apiKey || null,
     } as Event);
     console.log(toLogFormat(ctx, `answer saved to the database. total_tokens: ${chatResponse.usage?.total_tokens || null}`));
   } catch (error) {
@@ -668,6 +684,7 @@ async function saveCommandToDB(ctx: MyContext, command: string) {
       usage_completion_tokens: null,
       usage_prompt_tokens: null,
       usage_total_tokens: null,
+      api_key: null,
     } as Event);
     console.log(toLogFormat(ctx, `command saved to the database`));
   } catch (error) {
@@ -753,7 +770,7 @@ bot.help((ctx: MyContext) => {
 bot.command('reset', (ctx: MyContext) => {
   console.log(toLogFormat(ctx, `/reset command received`));
   if (ctx.chat && ctx.chat.id) {
-    deleteMessagesByChatId(ctx.chat.id);
+    deactivateMessagesByChatId(ctx.chat.id);
   } else {
     throw new Error(`ctx.chat.id is undefined`);
   }
@@ -797,6 +814,7 @@ async function processUserMessageAndRespond(
       role: "user",
       content: messageContent,
       chat_id: ctx.chat.id,
+      user_id: ctx.from?.id || null,
     });
   } else {
     throw new Error(`ctx.chat.id is undefined`);
@@ -815,7 +833,7 @@ async function processUserMessageAndRespond(
   console.log(toLogFormat(ctx, `chatGPT response received`));
 
   // Save the answer to the database
-  saveAnswerToDB(chatResponse, ctx);
+  saveAnswerToDB(chatResponse, ctx, userData);
 
   // Handle response sending
   await handleResponseSending(ctx, chatResponse);
@@ -823,34 +841,35 @@ async function processUserMessageAndRespond(
   return chatResponse;
 }
 
-async function processVoiceMessage(ctx: MyContext) {
-  insertEvent({
-    type: 'user_message',
-
-    user_id: ctx.from?.id || null,
-    user_is_bot: ctx.from?.is_bot || null,
-    user_language_code: ctx.from?.language_code || null,
-    user_username: ctx.from?.username || null,
-
-    chat_id: ctx.chat?.id || null,
-    chat_type: ctx.chat?.type || null,
-
-    message_role: "user",
-    messages_type: "voice",
-    message_voice_duration: ctx.message?.voice?.duration || null,
-    message_command: null,
-    content_length: null,
-
-    usage_model: null,
-    usage_object: null,
-    usage_completion_tokens: null,
-    usage_prompt_tokens: null,
-    usage_total_tokens: null,
-  } as Event);
-  
+async function processVoiceMessage(ctx: MyContext, pineconeIndex: any) {
   try {
     const userData = await getUserDataOrReplyWithError(ctx);
     if (!userData) return;
+
+    insertEvent({
+      type: 'user_message',
+
+      user_id: ctx.from?.id || null,
+      user_is_bot: ctx.from?.is_bot || null,
+      user_language_code: ctx.from?.language_code || null,
+      user_username: ctx.from?.username || null,
+
+      chat_id: ctx.chat?.id || null,
+      chat_type: ctx.chat?.type || null,
+
+      message_role: "user",
+      messages_type: "voice",
+      message_voice_duration: ctx.message?.voice?.duration || null,
+      message_command: null,
+      content_length: null,
+
+      usage_model: null,
+      usage_object: null,
+      usage_completion_tokens: null,
+      usage_prompt_tokens: null,
+      usage_total_tokens: null,
+      api_key: null,
+    } as Event);
 
     const fileId = ctx.message?.voice?.file_id || null;
     if (!fileId) {
@@ -905,6 +924,7 @@ async function processVoiceMessage(ctx: MyContext) {
       usage_completion_tokens: null,
       usage_prompt_tokens: null,
       usage_total_tokens: null,
+      api_key: userData.openai.apiKey || null,
     } as Event);
     console.log(toLogFormat(ctx, `new voice transcription saved to the database`));
 
@@ -929,34 +949,36 @@ async function processVoiceMessage(ctx: MyContext) {
 }
 
 async function processFullTextMessage(ctx: MyContext, fullMessage: string) {
-  insertEvent({
-    type: 'user_message',
-
-    user_id: ctx.from?.id || null,
-    user_is_bot: ctx.from?.is_bot || null,
-    user_language_code: ctx.from?.language_code || null,
-    user_username: ctx.from?.username || null,
-
-    chat_id: ctx.chat?.id || null,
-    chat_type: ctx.chat?.type || null,
-
-    message_role: "user",
-    messages_type: "text",
-    message_voice_duration: null,
-    message_command: null,
-    content_length: null,
-
-    usage_model: null,
-    usage_object: null,
-    usage_completion_tokens: null,
-    usage_prompt_tokens: null,
-    usage_total_tokens: null,
-  } as Event);
   console.log(toLogFormat(ctx, `new message saved to the database`));
   
   try {
     const userData = await getUserDataOrReplyWithError(ctx);
     if (!userData) return;
+
+    insertEvent({
+      type: 'user_message',
+  
+      user_id: ctx.from?.id || null,
+      user_is_bot: ctx.from?.is_bot || null,
+      user_language_code: ctx.from?.language_code || null,
+      user_username: ctx.from?.username || null,
+  
+      chat_id: ctx.chat?.id || null,
+      chat_type: ctx.chat?.type || null,
+  
+      message_role: "user",
+      messages_type: "text",
+      message_voice_duration: null,
+      message_command: null,
+      content_length: null,
+  
+      usage_model: null,
+      usage_object: null,
+      usage_completion_tokens: null,
+      usage_prompt_tokens: null,
+      usage_total_tokens: null,
+      api_key: null,
+    } as Event);
 
     await processUserMessageAndRespond(ctx, fullMessage, userData, pineconeIndex);
 
@@ -991,6 +1013,7 @@ bot.on(message('photo'), (ctx: MyContext) => {
     usage_completion_tokens: null,
     usage_prompt_tokens: null,
     usage_total_tokens: null,
+    api_key: null,
   } as Event);
 });
 
@@ -1019,6 +1042,7 @@ bot.on(message('video'), (ctx: MyContext) => {
     usage_completion_tokens: null,
     usage_prompt_tokens: null,
     usage_total_tokens: null,
+    api_key: null,
   } as Event);
 });
 
@@ -1047,12 +1071,13 @@ bot.on(message('sticker'), (ctx: MyContext) => {
     usage_completion_tokens: null,
     usage_prompt_tokens: null,
     usage_total_tokens: null,
+    api_key: null,
   } as Event);
 });
 
 bot.on(message('voice'), async (ctx: MyContext) => {
   console.log(toLogFormat(ctx, `[NEW] voice received`));
-  processVoiceMessage(ctx);
+  processVoiceMessage(ctx, pineconeIndex);
 });
 
 bot.on(message('text'), async (ctx: MyContext) => {
