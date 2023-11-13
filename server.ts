@@ -274,7 +274,7 @@ class NoOpenAiApiKeyError extends Error {
 
 const usedTokensForUser = async (user_id: number): Promise<number> => {
   const res = await pool.query('SELECT SUM(usage_total_tokens) FROM events WHERE user_id = $1', [user_id]);
-  return res.rows[0].sum || 1_000_000_000_000_000;
+  return res.rows[0].sum || 0;
 };
 
 const selectMessagesByChatIdGPTformat = async (ctx: MyContext) => {
