@@ -279,7 +279,14 @@ const usedTokensForUser = async (user_id: number): Promise<number> => {
 
 const selectMessagesByChatIdGPTformat = async (ctx: MyContext) => {
   if (ctx.chat && ctx.chat.id) {
-    const res = await pool.query('SELECT role, content FROM messages WHERE chat_id = $1 AND is_active = TRUE ORDER BY id', [ctx.chat.id]);
+    const res = await pool.query(`
+      SELECT role, content 
+      FROM messages 
+      WHERE chat_id = $1 
+        AND is_active = TRUE 
+        AND time >= NOW() - INTERVAL '2 hours' 
+      ORDER BY id
+    `, [ctx.chat.id]);
     console.log(toLogFormat(ctx, `messages received from the database: ${res.rows.length}`));
     return res.rows as MyMessage[];
   } else {
