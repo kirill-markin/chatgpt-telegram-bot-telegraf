@@ -284,7 +284,7 @@ const selectMessagesByChatIdGPTformat = async (ctx: MyContext) => {
       FROM messages 
       WHERE chat_id = $1 
         AND is_active = TRUE 
-        AND time >= NOW() - INTERVAL '2 hours' 
+        AND time >= NOW() - INTERVAL '16 hours' 
       ORDER BY id
     `, [ctx.chat.id]);
     console.log(toLogFormat(ctx, `messages received from the database: ${res.rows.length}`));
