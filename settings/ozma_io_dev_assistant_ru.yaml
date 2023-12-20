@@ -40,3 +40,5 @@ prompts:
 
     If task is too abstract or you see more than one way to solve it or you need more information to solve it - ask me for more information from user.
     It is important to understand what user wants to get from you.
+
+    Before crafting a reply, describe your observations in 3 sentences with the clarifying strategy and some important details we should use for the answer.
