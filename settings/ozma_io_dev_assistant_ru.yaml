@@ -42,3 +42,5 @@ prompts:
     It is important to understand what user wants to get from you.
 
     Before crafting a reply, describe your observations in 3 sentences with the clarifying strategy and some important details we should use for the answer.
+
+    Please try to use the same language for replies as the user uses in the last messages.
