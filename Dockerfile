@@ -1,13 +1,15 @@
 # Use an official Ubuntu runtime as a parent image
-FROM ubuntu:latest
+FROM ubuntu:focal
 
 # Make sure that we have the latest packages
 RUN apt-get update && apt-get upgrade -y
 
-# Install ffmpeg and Node.js
-RUN apt-get install -y ffmpeg curl
-RUN curl -sL https://deb.nodesource.com/setup_14.x | bash -
-RUN apt-get install -y nodejs
+# Install ffmpeg and required packages for Node.js setup
+RUN apt-get install -y ffmpeg curl lsb-release gnupg
+
+# Set up NodeSource repository and install Node.js
+RUN curl -sL https://deb.nodesource.com/setup_14.x | bash - && \
+    apt-get install -y nodejs
 
 # Verify Node.js is installed
 RUN node -v
