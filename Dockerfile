@@ -7,8 +7,8 @@ RUN apt-get update && apt-get upgrade -y
 # Install ffmpeg and required packages for Node.js setup
 RUN apt-get install -y ffmpeg curl lsb-release gnupg
 
-# Set up NodeSource repository and install Node.js
-RUN curl -sL https://deb.nodesource.com/setup_14.x | bash - && \
+# Set up NodeSource repository and install Node.js 22.x
+RUN curl -sL https://deb.nodesource.com/setup_22.x | bash - && \
     apt-get install -y nodejs
 
 # Verify Node.js is installed
