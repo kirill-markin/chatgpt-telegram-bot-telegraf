@@ -748,16 +748,28 @@ bot.use(async (ctx: MyContext, next) => {
   const stopSignal = () => isNextDone;
 
   // Start waiting and logging in parallel
-  let sendChatActionTyping = () => {};
+  let sendChatActionTyping = async () => {};
   let chatId: number = -1;
   if (ctx.chat && ctx.chat.id) {
     chatId = ctx.chat.id;
   } else {
     throw new Error(`ctx.chat.id is undefined`);
   }
+
   if (chatId !== -1) {
-    sendChatActionTyping = () => ctx.telegram.sendChatAction(chatId, 'typing');
+    sendChatActionTyping = async () => {
+      try {
+        await ctx.telegram.sendChatAction(chatId, 'typing');
+      } catch (error) {
+        if (error.response && error.response.error_code === 403) {
+          console.log(`User ${chatId} has blocked the bot.`);
+        } else {
+          console.error('Unexpected error:', error);
+        }
+      }
+    };
   }
+
   const waitPromise = waitAndLog(stopSignal, sendChatActionTyping);
 
   // Wait for next() to complete
@@ -767,7 +779,7 @@ bot.use(async (ctx: MyContext, next) => {
   // Wait for waitAndLog to finish
   await waitPromise;
 
-  const ms = new Date().getTime() - start.getTime() ;
+  const ms = new Date().getTime() - start.getTime();
   console.log(toLogFormat(ctx, `message processed. Response time: ${ms / 1000} seconds.`));
 });
 
