@@ -8,11 +8,11 @@
     "start": "ts-node --transpile-only server.ts"
   },
   "dependencies": {
-    "@pinecone-database/pinecone": "^0.1.6",
+    "@pinecone-database/pinecone": "^2.2.1",
     "axios": "^1.4.0",
     "body-parser": "^1.19.0",
-    "cross-fetch": "^3.1.6",
-    "dotenv": "^8.2.0",
+    "cross-fetch": "^4.0.0",
+    "dotenv": "^16.4.5",
     "express": "^4.17.1",
     "ffmpeg": "^0.0.4",
     "fluent-ffmpeg": "^2.1.2",

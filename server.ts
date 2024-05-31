@@ -13,7 +13,7 @@ import OpenAI from 'openai';
 
 import { encoding_for_model } from 'tiktoken';
 
-import { PineconeClient } from "@pinecone-database/pinecone";
+import { Pinecone } from '@pinecone-database/pinecone';
 
 interface SessionData {
 	messageCount: number;
@@ -110,20 +110,29 @@ const pool = new Pool({
 // Connect to the Pinecone database
 
 let pineconeIndex: any = null;
+
+// Check if process.env.PINECONE_API_KEY is a string 
+// and process.env.PINECONE_INDEX_NAME is a string and they are not empty
 if (
-  process.env.PINECONE_ENVIRONMENT 
-  && process.env.PINECONE_API_KEY
+  typeof process.env.PINECONE_API_KEY == 'string' 
+  && typeof process.env.PINECONE_INDEX_NAME == 'string' 
+  && process.env.PINECONE_API_KEY 
   && process.env.PINECONE_INDEX_NAME
 ) {
   (async () => {
-    const pinecone = new PineconeClient();
-    pinecone.projectName = process.env.PINECONE_PROJECT_NAME || null;
-    await pinecone.init({
-      environment: process.env.PINECONE_ENVIRONMENT || '',
-      apiKey: process.env.PINECONE_API_KEY || '',
-    });
-    pineconeIndex = pinecone.Index(process.env.PINECONE_INDEX_NAME || '');
-    console.log('Pinecone database connected');
+    try {
+      // Initialize the Pinecone client
+      const pinecone = new Pinecone({
+        apiKey: process.env.PINECONE_API_KEY
+      });
+
+      // Connect to the Pinecone index
+      pineconeIndex = pinecone.index(process.env.PINECONE_INDEX_NAME);
+
+      console.log('Pinecone database connected');
+    } catch (error) {
+      console.error('Error connecting to Pinecone:', error);
+    }
   })();
 } else {
   console.log('Pinecone database not connected');
@@ -538,7 +547,7 @@ async function createChatCompletionWithRetryReduceHistoryLongtermMemory(ctx: MyC
         includeValues: false,
         includeMetadata: true,
       };
-      const queryResponse = await pineconeIndex.query({ queryRequest });
+      const queryResponse = await pineconeIndex.query( queryRequest );
 
       // TODO: add wiki URLs to the referenceMessage from metadata.source
 
