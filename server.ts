@@ -8,7 +8,8 @@ import yaml from 'yaml'
 import { Context, session, Telegraf } from "telegraf";
 import { message, editedMessage, channelPost, editedChannelPost, callbackQuery } from "telegraf/filters";
 
-import ffmpeg from 'fluent-ffmpeg';
+import ffmpegPath from 'ffmpeg-static';
+import { execFile } from 'child_process';
 import OpenAI from 'openai';
 
 import { encoding_for_model } from 'tiktoken';
@@ -889,6 +890,21 @@ async function processUserMessageAndRespond(
   return chatResponse;
 }
 
+async function convertOgaToMp3(fileId: string) {
+  const inputFilePath = `./${fileId}.oga`;
+  const outputFilePath = `./${fileId}.mp3`;
+
+  return new Promise((resolve, reject) => {
+    execFile(ffmpegPath, ['-i', inputFilePath, outputFilePath], (error) => {
+      if (error) {
+        reject(error);
+      } else {
+        resolve(outputFilePath);
+      }
+    });
+  });
+}
+
 async function processVoiceMessage(ctx: MyContext, pineconeIndex: any) {
   try {
     const userData = await getUserDataOrReplyWithError(ctx);
@@ -924,7 +940,7 @@ async function processVoiceMessage(ctx: MyContext, pineconeIndex: any) {
       throw new Error(`ctx.message.voice.file_id is undefined`);
     }
 
-    // download the file
+    // Download the file
     const url = await ctx.telegram.getFileLink(fileId);
     const response = await axios({ url: url.toString(), responseType: 'stream' });
 
@@ -935,21 +951,16 @@ async function processVoiceMessage(ctx: MyContext, pineconeIndex: any) {
     });
     console.log(toLogFormat(ctx, `voice file downloaded`));
 
-    await new Promise((resolve, reject) => {
-      ffmpeg(`./${fileId}.oga`)
-        .toFormat('mp3')
-        .on('error', reject)
-        .on('end', resolve)
-        .saveToFile(`./${fileId}.mp3`);
-    });
+    // Convert the file to mp3
+    await convertOgaToMp3(fileId);
     console.log(toLogFormat(ctx, `voice file converted`));
 
-    // send the file to the OpenAI API for transcription
+    // Send the file to the OpenAI API for transcription
     const transcription = await createTranscriptionWithRetry(fs.createReadStream(`./${fileId}.mp3`), userData.openai);
     const transcriptionText = transcription.text;
     console.log(toLogFormat(ctx, `voice transcription received`));
 
-    // save the transcription event to the database
+    // Save the transcription event to the database
     insertEvent({
       type: 'model_transcription',
 
@@ -1152,4 +1163,7 @@ bot.on(message('text'), async (ctx: MyContext) => {
   messageBuffers.set(key, messageData);
 });
 
-bot.launch()
+bot.launch();
+console.log('Bot started');
+
+export default bot;

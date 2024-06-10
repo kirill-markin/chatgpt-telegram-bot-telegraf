@@ -5,7 +5,8 @@
   "author": "Kirill Markin",
   "license": "MIT",
   "scripts": {
-    "start": "ts-node --transpile-only server.ts"
+    "start": "ts-node --transpile-only server.ts",
+    "test": "jest"
   },
   "dependencies": {
     "@pinecone-database/pinecone": "^2.2.1",
@@ -14,8 +15,7 @@
     "cross-fetch": "^4.0.0",
     "dotenv": "^16.4.5",
     "express": "^4.17.1",
-    "ffmpeg": "^0.0.4",
-    "fluent-ffmpeg": "^2.1.2",
+    "ffmpeg-static": "^5.2.0",
     "follow-redirects": "^1.15.4",
     "fs": "0.0.1-security",
     "openai": "^4.17.1",
@@ -30,6 +30,11 @@
   "devDependencies": {
     "@types/express": "^4.17.17",
     "@types/fluent-ffmpeg": "^2.1.21",
-    "@types/pg": "^8.10.1"
+    "@types/jest": "^29.5.12",
+    "@types/pg": "^8.10.1",
+    "@types/supertest": "^6.0.2",
+    "jest": "^29.7.0",
+    "supertest": "^7.0.0",
+    "ts-jest": "^29.1.4"
   }
 }
