@@ -1,2 +1,6 @@
 node_modules/
 .env
+
+.DS_Store
+
+repo-to-text_*.txt

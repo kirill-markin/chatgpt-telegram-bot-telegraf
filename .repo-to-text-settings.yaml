@@ -1,0 +1,24 @@
+# Details: https://github.com/kirill-markin/repo-to-text
+# Syntax: gitignore rules
+
+# Ignore files and directories for all sections from gitignore file
+# Default: True
+gitignore-import-and-ignore: True
+
+# Ignore files and directories for tree
+# and "Contents of ..." sections
+ignore-tree-and-content:
+  - ".repo-to-text-settings.yaml"
+
+# Ignore files and directories for "Contents of ..." section
+ignore-content:
+  - "README.md"
+  - "LICENSE"
+  - "tests/"
+  - "package-lock.json"
+  - "package.json"
+  - "changelog.md"
+  - "settings/"
+  - "yarn.lock"
+  - "tsconfig.json"
+  - "Dockerfile"
