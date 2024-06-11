@@ -1,4 +1,3 @@
-import dotenv from "dotenv";
 import fs from "fs";
 import axios, { AxiosResponse } from 'axios';
 import pTimeout from 'p-timeout';
@@ -13,14 +12,28 @@ import { Pinecone } from '@pinecone-database/pinecone';
 import { usedTokensForUser, selectMessagesByChatIdGPTformat, selectUserByUserId, insertMessage, insertUserOrUpdate, insertEvent, deleteMessagesByChatId, deactivateMessagesByChatId } from './database';
 import { sendLongMessage, toLogFormat } from './utils';
 import { MyContext, MyMessage, User, Event, UserData } from './types';
+import {
+  GPT_MODEL,
+  maxTokensThreshold,
+  averageAnswerTokens,
+  maxTokensThresholdToReduceHistory,
+  RESET_MESSAGE,
+  NO_OPENAI_KEY_ERROR,
+  TRIAL_ENDED_ERROR,
+  NO_PHOTO_ERROR,
+  NO_VIDEO_ERROR,
+  NO_ANSWER_ERROR,
+  maxTrialsTokens,
+  helpString,
+  errorString,
+  botSettings,
+  defaultPrompt,
+  defaultPromptMessage
+} from './config';
 
 // Connect to the postgress database
 import { pool } from './database';
 
-
-if (fs.existsSync(".env")) {
-  dotenv.config();
-}
 
 if (!process.env.TELEGRAM_BOT_TOKEN || !process.env.OPENAI_API_KEY || !process.env.DATABASE_URL) {
   throw new Error(
@@ -59,23 +72,6 @@ if (
 } else {
   console.log('Pinecone database not connected');
 }
-
-const prompts_path = process.env.SETTINGS_PATH || './settings/private_en.yaml';
-const fileContents = fs.readFileSync(prompts_path, 'utf8');
-const bot_settings = yaml.parse(fileContents);
-
-const GPT_MODEL = bot_settings.gpt_model;
-const maxTokensThreshold = 128_000;
-const averageAnswerTokens = 8_000;
-const maxTokensThresholdToReduceHistory = maxTokensThreshold - averageAnswerTokens;
-const RESET_MESSAGE = bot_settings.strings.reset_message || 'Old messages deleted';
-const NO_OPENAI_KEY_ERROR = bot_settings.strings.no_openai_key_error || 'No OpenAI key provided. Please contact the bot owner.';
-const TRIAL_ENDED_ERROR = bot_settings.strings.trial_ended_error || 'Trial period ended. Please contact the bot owner.';
-const NO_PHOTO_ERROR = bot_settings.strings.no_photo_error || 'Bot can not process photos.';
-const NO_VIDEO_ERROR = bot_settings.strings.no_video_error || 'Bot can not process videos.';
-const NO_ANSWER_ERROR = bot_settings.strings.no_answer_error || 'Bot can not answer to this message.';
-
-const maxTrialsTokens = bot_settings.max_trials_tokens || 200_000;
 
 // Create needed tables if not exists
 
@@ -184,9 +180,6 @@ class NoOpenAiApiKeyError extends Error {
 
 
 // default prompt message to add to the GPT model
-
-const defaultPrompt: Prompt | undefined = bot_settings.prompts.find((prompt: Prompt) => prompt.name === 'default');
-const defaultPromptMessage = defaultPrompt ? defaultPrompt.text : '';
 
 let defaultPromptMessageObj = {} as MyMessage;
 if (defaultPromptMessage) {
@@ -558,9 +551,6 @@ bot.use(async (ctx: MyContext, next) => {
   const ms = new Date().getTime() - start.getTime();
   console.log(toLogFormat(ctx, `message processed. Response time: ${ms / 1000} seconds.`));
 });
-
-const helpString = bot_settings.strings.help_string;
-const errorString = bot_settings.strings.error_string;
 
 bot.start((ctx: MyContext) => {
   console.log(toLogFormat(ctx, `/start command received`));
