@@ -1,8 +1,9 @@
 import dotenv from "dotenv";
 import fs from "fs";
 import { Pool, QueryResult } from 'pg';
-import { MyContext, MyMessage, User, Event } from './types';
+import { MyContext, MyMessage, User, Event, UserData } from './types';
 import { toLogFormat } from './utils';
+import { NO_ANSWER_ERROR } from './config.ts';
 
 if (fs.existsSync(".env")) {
   dotenv.config();
@@ -15,60 +16,6 @@ const pool = new Pool({
   }
 });
 export { pool }; 
-
-const createTableQueries = [
-  `
-  CREATE TABLE IF NOT EXISTS users (
-    id SERIAL PRIMARY KEY,
-    user_id bigint UNIQUE NOT NULL,
-    username VARCHAR(255),
-    default_language_code VARCHAR(255),
-    language_code VARCHAR(255),
-    openai_api_key VARCHAR(255),
-    usage_type VARCHAR(255) DEFAULT NULL,
-    created_at TIMESTAMP
-  );
-  `,
-  `
-  CREATE TABLE IF NOT EXISTS messages (
-    id SERIAL PRIMARY KEY,
-    role VARCHAR(255) NOT NULL,
-    content TEXT NOT NULL,
-    chat_id bigint NOT NULL,
-    is_active BOOLEAN DEFAULT TRUE,
-    user_id bigint REFERENCES users(id),
-    time TIMESTAMP
-  );
-  `,
-  `
-  CREATE TABLE IF NOT EXISTS events (
-    id SERIAL PRIMARY KEY,
-    time TIMESTAMP NOT NULL,
-    type VARCHAR(255) NOT NULL,
-  
-    user_id bigint,
-    user_is_bot BOOLEAN,
-    user_language_code VARCHAR(255),
-    user_username VARCHAR(255),
-  
-    chat_id bigint,
-    chat_type VARCHAR(255),
-  
-    message_role VARCHAR(255),
-    messages_type VARCHAR(255),
-    message_voice_duration INT,
-    message_command VARCHAR(255),
-    content_length INT,
-    
-    usage_model VARCHAR(255),
-    usage_object VARCHAR(255),
-    usage_completion_tokens INT,
-    usage_prompt_tokens INT,
-    usage_total_tokens INT,
-    api_key VARCHAR(255)
-  );
-  `
-];
 
 export const usedTokensForUser = async (user_id: number): Promise<number> => {
   const res = await pool.query('SELECT SUM(usage_total_tokens) FROM events WHERE user_id = $1', [user_id]);
@@ -202,4 +149,160 @@ export const deleteMessagesByChatId = async (chat_id: number) => {
 export const deactivateMessagesByChatId = async (chat_id: number) => {
   const res = await pool.query('UPDATE messages SET is_active = FALSE WHERE chat_id = $1', [chat_id]);
   return res;
+}
+
+export async function saveAnswerToDB(chatResponse: any, ctx: MyContext, userData: UserData) {
+  try {
+    const answer = chatResponse.choices?.[0]?.message?.content || NO_ANSWER_ERROR;
+    if (ctx.chat && ctx.chat.id) {
+      insertMessage({
+        role: "assistant",
+        content: answer,
+        chat_id: ctx.chat.id,
+        user_id: null,
+      });
+    } else {
+      throw new Error(`ctx.chat.id is undefined`);
+    }
+    insertEvent({
+      type: 'assistant_message',
+      user_id: ctx.from?.id || null,
+      user_is_bot: ctx.from?.is_bot || null,
+      user_language_code: ctx.from?.language_code || null,
+      user_username: ctx.from?.username || null,
+      chat_id: ctx.chat?.id || null,
+      chat_type: ctx.chat?.type || null,
+      message_role: "assistant",
+      messages_type: "text",
+      message_voice_duration: null,
+      message_command: null,
+      content_length: answer.length,
+      usage_model: chatResponse.model || null,
+      usage_object: chatResponse.object || null,
+      usage_completion_tokens: chatResponse.usage?.completion_tokens || null,
+      usage_prompt_tokens: chatResponse.usage?.prompt_tokens || null,
+      usage_total_tokens: chatResponse.usage?.total_tokens || null,
+      api_key: userData.openai.apiKey || null,
+    } as Event);
+    console.log(toLogFormat(ctx, `answer saved to the database. total_tokens: ${chatResponse.usage?.total_tokens || null}`));
+  } catch (error) {
+    console.log(toLogFormat(ctx, `[ERROR] error in saving the answer to the database: ${error}`));
+  }
+}
+
+export async function saveCommandToDB(ctx: MyContext, command: string) {
+  try {
+    insertEvent({
+      type: 'user_command',
+      user_id: ctx.from?.id || null,
+      user_is_bot: ctx.from?.is_bot || null,
+      user_language_code: ctx.from?.language_code || null,
+      user_username: ctx.from?.username || null,
+      chat_id: ctx.chat?.id || null,
+      chat_type: ctx.chat?.type || null,
+      message_role: "user",
+      messages_type: "text",
+      message_voice_duration: null,
+      message_command: command,
+      content_length: null,
+      usage_model: null,
+      usage_object: null,
+      usage_completion_tokens: null,
+      usage_prompt_tokens: null,
+      usage_total_tokens: null,
+      api_key: null,
+    } as Event);
+    console.log(toLogFormat(ctx, `${command} saved to the database`));
+  } catch (error) {
+    console.log(toLogFormat(ctx, `[ERROR] error in saving the command to the database: ${error}`));
+  }
+}
+
+// insertEvent Simple with only type, message_role, messages_type and this is it
+export async function insertEventSimple(ctx: MyContext, type: string, message_role: string, messages_type: string) {
+  try {
+    insertEvent({
+      type: type,
+      user_id: ctx.from?.id || null,
+      user_is_bot: ctx.from?.is_bot || null,
+      user_language_code: ctx.from?.language_code || null,
+      user_username: ctx.from?.username || null,
+      chat_id: ctx.chat?.id || null,
+      chat_type: ctx.chat?.type || null,
+      message_role: message_role,
+      messages_type: messages_type,
+      message_voice_duration: null,
+      message_command: null,
+      content_length: null,
+      usage_model: null,
+      usage_object: null,
+      usage_completion_tokens: null,
+      usage_prompt_tokens: null,
+      usage_total_tokens: null,
+      api_key: null,
+    } as Event);
+    console.log(toLogFormat(ctx, `${message_role} saved to the database`));
+  } catch (error) {
+    console.log(toLogFormat(ctx, `[ERROR] error in saving the ${message_role} to the database: ${error}`));
+  }
+}
+
+export async function insertEventViaMessageType(ctx: MyContext, eventType: string, messageType: string, messageContent: string) {
+  try {
+    insertEvent({
+      type: eventType,
+      user_id: ctx.from?.id || null,
+      user_is_bot: ctx.from?.is_bot || null,
+      user_language_code: ctx.from?.language_code || null,
+      user_username: ctx.from?.username || null,
+      chat_id: ctx.chat?.id || null,
+      chat_type: ctx.chat?.type || null,
+      message_role: "user",
+      messages_type: messageType,
+      message_voice_duration: messageType === "voice" ? ctx.message?.voice?.duration : null,
+      message_command: null,
+      content_length: messageContent.length,
+      usage_model: null,
+      usage_object: null,
+      usage_completion_tokens: null,
+      usage_prompt_tokens: null,
+      usage_total_tokens: null,
+      api_key: null,
+    } as Event);
+    console.log(toLogFormat(ctx, `${messageType} saved to the database`));
+  } catch (error) {
+    console.log(toLogFormat(ctx, `[ERROR] error in saving the ${messageType} to the database: ${error}`));
+  }
+}
+
+export async function insertModelTranscriptionEvent(ctx: MyContext, transcriptionText: string, userData: UserData) {
+  try {
+    insertEvent({
+      type: 'model_transcription',
+
+      user_id: ctx.from?.id || null,
+      user_is_bot: ctx.from?.is_bot || null,
+      user_language_code: ctx.from?.language_code || null,
+      user_username: ctx.from?.username || null,
+
+      chat_id: ctx.chat?.id || null,
+      chat_type: ctx.chat?.type || null,
+
+      message_role: null,
+      messages_type: null,
+      message_voice_duration: null,
+      message_command: null,
+      content_length: transcriptionText.length,
+
+      usage_model: "whisper-1",
+      usage_object: null,
+      usage_completion_tokens: null,
+      usage_prompt_tokens: null,
+      usage_total_tokens: null,
+      api_key: userData.openai.apiKey || null,
+    } as Event);
+    console.log(toLogFormat(ctx, `model_transcription saved to the database`));
+  } catch (error) {
+    console.log(toLogFormat(ctx, `[ERROR] error in saving the model_transcription to the database: ${error}`));
+  }
 }

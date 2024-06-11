@@ -12,7 +12,12 @@ import {
   insertMessage, 
   insertUserOrUpdate, 
   insertEvent, 
-  deactivateMessagesByChatId 
+  deactivateMessagesByChatId,
+  insertEventSimple,
+  insertEventViaMessageType,
+  insertModelTranscriptionEvent,
+  saveCommandToDB,
+  saveAnswerToDB,
 } from './database';
 import {
   RESET_MESSAGE,
@@ -101,84 +106,6 @@ class NoOpenAiApiKeyError extends Error {
   constructor(message: string) {
     super(message);
     this.name = 'NoOpenAiApiKeyError';
-  }
-}
-
-
-// Save answer to the database to all tables
-async function saveAnswerToDB(chatResponse: any, ctx: MyContext, userData: UserData) {
-  try {
-    // save the answer to the database
-    const answer = chatResponse.choices?.[0]?.message?.content || NO_ANSWER_ERROR;
-    if (ctx.chat && ctx.chat.id) {
-      insertMessage({
-        role: "assistant",
-        content: answer,
-        chat_id: ctx.chat.id,
-        user_id: null,
-        });
-    } else {
-      throw new Error(`ctx.chat.id is undefined`);
-    }
-    insertEvent({
-      type: 'assistant_message',
-
-      user_id: ctx.from?.id || null,
-      user_is_bot: ctx.from?.is_bot || null,
-      user_language_code: ctx.from?.language_code || null,
-      user_username: ctx.from?.username || null,
-
-      chat_id: ctx.chat?.id || null,
-      chat_type: ctx.chat?.type || null,
-
-      message_role: "assistant",
-      messages_type: "text",
-      message_voice_duration: null,
-      message_command: null,
-      content_length: answer.length,
-
-      usage_model: chatResponse.model || null,
-      usage_object: chatResponse.object || null,
-      usage_completion_tokens: chatResponse.usage?.completion_tokens || null,
-      usage_prompt_tokens: chatResponse.usage?.prompt_tokens || null,
-      usage_total_tokens: chatResponse.usage?.total_tokens || null,
-      api_key: userData.openai.apiKey || null,
-    } as Event);
-    console.log(toLogFormat(ctx, `answer saved to the database. total_tokens: ${chatResponse.usage?.total_tokens || null}`));
-  } catch (error) {
-    console.log(toLogFormat(ctx, `[ERROR] error in saving the answer to the database: ${error}`));
-  }
-}
-
-async function saveCommandToDB(ctx: MyContext, command: string) {
-  try {
-    insertEvent({
-      type: 'user_command',
-
-      user_id: ctx.from?.id || null,
-      user_is_bot: ctx.from?.is_bot || null,
-      user_language_code: ctx.from?.language_code || null,
-      user_username: ctx.from?.username || null,
-
-      chat_id: ctx.chat?.id || null,
-      chat_type: ctx.chat?.type || null,
-
-      message_role: "user",
-      messages_type: "text",
-      message_voice_duration: null,
-      message_command: command,
-      content_length: null,
-
-      usage_model: null,
-      usage_object: null,
-      usage_completion_tokens: null,
-      usage_prompt_tokens: null,
-      usage_total_tokens: null,
-      api_key: null,
-    } as Event);
-    console.log(toLogFormat(ctx, `command saved to the database`));
-  } catch (error) {
-    console.log(toLogFormat(ctx, `[ERROR] error in saving the command to the database: ${error}`));
   }
 }
 
@@ -321,7 +248,7 @@ async function processUserMessageAndRespond(
   let messages: MyMessage[] = await selectMessagesByChatIdGPTformat(ctx);
 
   // DEBUG: messages to console in a pretty format JSON with newlines
-  // console.log(JSON.stringify(messages, null, 2));
+  console.log(JSON.stringify(messages, null, 2));
 
   // Send this text to OpenAI's Chat GPT model with retry logic
   const chatResponse: any = await createChatCompletionWithRetryReduceHistoryLongtermMemory(
@@ -362,27 +289,7 @@ async function processMessage(ctx: MyContext, messageContent: string, eventType:
   try {
     const userData = await getUserDataOrReplyWithError(ctx);
     if (!userData) return;
-
-    insertEvent({
-      type: eventType,
-      user_id: ctx.from?.id || null,
-      user_is_bot: ctx.from?.is_bot || null,
-      user_language_code: ctx.from?.language_code || null,
-      user_username: ctx.from?.username || null,
-      chat_id: ctx.chat?.id || null,
-      chat_type: ctx.chat?.type || null,
-      message_role: "user",
-      messages_type: messageType,
-      message_voice_duration: messageType === "voice" ? ctx.message?.voice?.duration : null,
-      message_command: null,
-      content_length: messageContent.length,
-      usage_model: null,
-      usage_object: null,
-      usage_completion_tokens: null,
-      usage_prompt_tokens: null,
-      usage_total_tokens: null,
-      api_key: null,
-    } as Event);
+    insertEventViaMessageType(ctx, eventType, messageType, messageContent);
     console.log(toLogFormat(ctx, `new ${messageType} message saved to the events table`));
 
     await processUserMessageAndRespond(ctx, messageContent, userData, pineconeIndex);
@@ -423,30 +330,7 @@ async function processVoiceMessage(ctx: MyContext, pineconeIndex: any) {
     console.log(toLogFormat(ctx, "voice transcription received"));
 
     // Save the transcription event to the database
-    insertEvent({
-      type: 'model_transcription',
-
-      user_id: ctx.from?.id || null,
-      user_is_bot: ctx.from?.is_bot || null,
-      user_language_code: ctx.from?.language_code || null,
-      user_username: ctx.from?.username || null,
-
-      chat_id: ctx.chat?.id || null,
-      chat_type: ctx.chat?.type || null,
-
-      message_role: null,
-      messages_type: null,
-      message_voice_duration: null,
-      message_command: null,
-      content_length: transcriptionText.length,
-
-      usage_model: "whisper-1",
-      usage_object: null,
-      usage_completion_tokens: null,
-      usage_prompt_tokens: null,
-      usage_total_tokens: null,
-      api_key: userData.openai.apiKey || null,
-    } as Event);
+    insertModelTranscriptionEvent(ctx, transcriptionText, userData);
     console.log(toLogFormat(ctx, `new voice transcription saved to the database`));
 
     // Delete both audio files
@@ -466,88 +350,19 @@ async function processVoiceMessage(ctx: MyContext, pineconeIndex: any) {
 bot.on(message('photo'), (ctx: MyContext) => {
   console.log(toLogFormat(ctx, `photo received`));
   ctx.reply(NO_PHOTO_ERROR);
-  insertEvent({
-    type: 'user_message',
-
-    user_id: ctx.from?.id || null,
-    user_is_bot: ctx.from?.is_bot || null,
-    user_language_code: ctx.from?.language_code || null,
-    user_username: ctx.from?.username || null,
-
-    chat_id: ctx.chat?.id || null,
-    chat_type: ctx.chat?.type || null,
-
-    message_role: "user",
-    messages_type: "photo",
-    message_voice_duration: null,
-    message_command: null,
-    content_length: null,
-
-    usage_model: null,
-    usage_object: null,
-    usage_completion_tokens: null,
-    usage_prompt_tokens: null,
-    usage_total_tokens: null,
-    api_key: null,
-  } as Event);
+  insertEventSimple(ctx, 'user_message', 'user', 'photo');
 });
 
 bot.on(message('video'), (ctx: MyContext) => {
   console.log(toLogFormat(ctx, `video received`));
   ctx.reply(NO_VIDEO_ERROR);
-  insertEvent({
-    type: 'user_message',
-
-    user_id: ctx.from?.id || null,
-    user_is_bot: ctx.from?.is_bot || null,
-    user_language_code: ctx.from?.language_code || null,
-    user_username: ctx.from?.username || null,
-
-    chat_id: ctx.chat?.id || null,
-    chat_type: ctx.chat?.type || null,
-
-    message_role: "user",
-    messages_type: "video",
-    message_voice_duration: null,
-    message_command: null,
-    content_length: null,
-
-    usage_model: null,
-    usage_object: null,
-    usage_completion_tokens: null,
-    usage_prompt_tokens: null,
-    usage_total_tokens: null,
-    api_key: null,
-  } as Event);
+  insertEventSimple(ctx, 'user_message', 'user', 'video');
 });
 
 bot.on(message('sticker'), (ctx: MyContext) => {
   console.log(toLogFormat(ctx, `sticker received`));
   ctx.reply('👍');
-  insertEvent({
-    type: 'user_message',
-
-    user_id: ctx.from?.id || null,
-    user_is_bot: ctx.from?.is_bot || null,
-    user_language_code: ctx.from?.language_code || null,
-    user_username: ctx.from?.username || null,
-
-    chat_id: ctx.chat?.id || null,
-    chat_type: ctx.chat?.type || null,
-
-    message_role: "user",
-    messages_type: "sticker",
-    message_voice_duration: null,
-    message_command: null,
-    content_length: null,
-
-    usage_model: null,
-    usage_object: null,
-    usage_completion_tokens: null,
-    usage_prompt_tokens: null,
-    usage_total_tokens: null,
-    api_key: null,
-  } as Event);
+  insertEventSimple(ctx, 'user_message', 'user', 'sticker');
 });
 
 bot.on(message('voice'), async (ctx: MyContext) => {
