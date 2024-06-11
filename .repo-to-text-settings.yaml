@@ -22,4 +22,5 @@ ignore-content:
   - "tsconfig.json"
   - "Dockerfile"
   - "scripts/"
-  # - "tests/"
+  
+  - "__tests__/"
