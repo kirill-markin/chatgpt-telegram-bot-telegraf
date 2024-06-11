@@ -1,6 +1,7 @@
 import dotenv from "dotenv";
 import fs from "fs";
 import yaml from 'yaml';
+import { Prompt } from "./types";
 
 if (fs.existsSync(".env")) {
   dotenv.config();

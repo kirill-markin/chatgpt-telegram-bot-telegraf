@@ -1,33 +1,27 @@
 import fs from "fs";
 import axios from 'axios';
-import pTimeout from 'p-timeout';
 import { Telegraf } from "telegraf";
 import { message } from "telegraf/filters";
 import ffmpegPath from 'ffmpeg-static';
 import { execFile } from 'child_process';
-import OpenAI from 'openai';
-import { encoding_for_model } from 'tiktoken';
 import { Pinecone } from '@pinecone-database/pinecone';
-import { usedTokensForUser, selectMessagesByChatIdGPTformat, selectUserByUserId, insertMessage, insertUserOrUpdate, insertEvent, deleteMessagesByChatId, deactivateMessagesByChatId } from './database';
 import { sendLongMessage, toLogFormat, getMessageBufferKey } from './utils';
 import { MyContext, MyMessage, User, Event, UserData } from './types';
+import { 
+  selectMessagesByChatIdGPTformat, 
+  insertMessage, 
+  insertUserOrUpdate, 
+  insertEvent, 
+  deactivateMessagesByChatId 
+} from './database';
 import {
-  GPT_MODEL,
-  maxTokensThreshold,
-  averageAnswerTokens,
-  maxTokensThresholdToReduceHistory,
   RESET_MESSAGE,
-  NO_OPENAI_KEY_ERROR,
   TRIAL_ENDED_ERROR,
   NO_PHOTO_ERROR,
   NO_VIDEO_ERROR,
   NO_ANSWER_ERROR,
-  maxTrialsTokens,
   helpString,
   errorString,
-  botSettings,
-  defaultPrompt,
-  defaultPromptMessage,
   timeoutMsDefaultchatGPT,
 } from './config';
 import { 
@@ -38,6 +32,8 @@ import {
 
 // Connect to the postgress database
 import { pool } from './database';
+
+import { initializeDatabase } from './databaseInit';
 
 
 if (!process.env.TELEGRAM_BOT_TOKEN || !process.env.OPENAI_API_KEY || !process.env.DATABASE_URL) {
@@ -63,11 +59,11 @@ if (
     try {
       // Initialize the Pinecone client
       const pinecone = new Pinecone({
-        apiKey: process.env.PINECONE_API_KEY as string,
+        apiKey: process.env.PINECONE_API_KEY,
       });
 
       // Connect to the Pinecone index
-      pineconeIndex = pinecone.index(process.env.PINECONE_INDEX_NAME) as string;
+      pineconeIndex = pinecone.index(process.env.PINECONE_INDEX_NAME);
 
       console.log('Pinecone database connected');
     } catch (error) {
@@ -78,61 +74,7 @@ if (
   console.log('Pinecone database not connected');
 }
 
-// Create needed tables if not exists
-
-const createTableQueries = [
-  `
-  CREATE TABLE IF NOT EXISTS users (
-    id SERIAL PRIMARY KEY,
-    user_id bigint UNIQUE NOT NULL,
-    username VARCHAR(255),
-    default_language_code VARCHAR(255),
-    language_code VARCHAR(255),
-    openai_api_key VARCHAR(255),
-    usage_type VARCHAR(255) DEFAULT NULL,
-    created_at TIMESTAMP
-  );
-  `,
-  `
-  CREATE TABLE IF NOT EXISTS messages (
-    id SERIAL PRIMARY KEY,
-    role VARCHAR(255) NOT NULL,
-    content TEXT NOT NULL,
-    chat_id bigint NOT NULL,
-    is_active BOOLEAN DEFAULT TRUE,
-    user_id bigint REFERENCES users(id),
-    time TIMESTAMP
-  );
-  `,
-  `
-  CREATE TABLE IF NOT EXISTS events (
-    id SERIAL PRIMARY KEY,
-    time TIMESTAMP NOT NULL,
-    type VARCHAR(255) NOT NULL,
-  
-    user_id bigint,
-    user_is_bot BOOLEAN,
-    user_language_code VARCHAR(255),
-    user_username VARCHAR(255),
-  
-    chat_id bigint,
-    chat_type VARCHAR(255),
-  
-    message_role VARCHAR(255),
-    messages_type VARCHAR(255),
-    message_voice_duration INT,
-    message_command VARCHAR(255),
-    content_length INT,
-    
-    usage_model VARCHAR(255),
-    usage_object VARCHAR(255),
-    usage_completion_tokens INT,
-    usage_prompt_tokens INT,
-    usage_total_tokens INT,
-    api_key VARCHAR(255)
-  );
-  `
-]
+initializeDatabase();
 
 // Create a map to store the message buffers
 
@@ -154,16 +96,6 @@ async function handleResponseSending(ctx: MyContext, chatResponse: any) {
     await sendLongMessage(ctx, "An error occurred while processing your request. Please try again later.");
   }
 }
-
-for (const createTableQuery of createTableQueries) {
-  pool.query(createTableQuery, (err: Error, res: QueryResult) => {
-    if (err) {
-      console.error('Error with checking/creating tables', err.stack);
-      throw err;
-    }
-  });
-}
-console.log('Related tables checked/created successfully');
 
 class NoOpenAiApiKeyError extends Error {
   constructor(message: string) {
