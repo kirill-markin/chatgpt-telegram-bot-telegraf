@@ -2,88 +2,21 @@ import dotenv from "dotenv";
 import fs from "fs";
 import axios, { AxiosResponse } from 'axios';
 import pTimeout from 'p-timeout';
-
-import yaml from 'yaml'
-
+import yaml from 'yaml';
 import { Context, session, Telegraf } from "telegraf";
-import { message, editedMessage, channelPost, editedChannelPost, callbackQuery } from "telegraf/filters";
-
+import { message } from "telegraf/filters";
 import ffmpegPath from 'ffmpeg-static';
 import { execFile } from 'child_process';
 import OpenAI from 'openai';
-
 import { encoding_for_model } from 'tiktoken';
-
 import { Pinecone } from '@pinecone-database/pinecone';
+import { usedTokensForUser, selectMessagesByChatIdGPTformat, selectUserByUserId, insertMessage, insertUserOrUpdate, insertEvent, deleteMessagesByChatId, deactivateMessagesByChatId } from './database';
+import { sendLongMessage, toLogFormat } from './utils';
+import { MyContext, MyMessage, User, Event, UserData } from './types';
 
-interface SessionData {
-	messageCount: number;
-}
+// Connect to the postgress database
+import { pool } from './database';
 
-interface MyContext extends Context {
-	session?: SessionData;
-}
-
-interface MyMessage {
-  role: "user" | "assistant";
-  content: string;
-  chat_id: number | null;
-  user_id: number | null;
-}
-
-interface Prompt {
-  name: string;
-  text: string;
-}
-
-interface User {
-  user_id: number;
-  username: string;
-  default_language_code: string;
-  language_code?: string | null;
-  openai_api_key?: string | null;
-  usage_type?: string | null;
-}
-
-interface Event {
-  time: Date;
-  type: string;
-
-  user_id?: number | null;
-  user_is_bot?: boolean | null;
-  user_language_code?: string | null;
-  user_username?: string | null;
-
-  chat_id?: number | null;
-  chat_type?: string | null;
-
-  message_role?: string | null;
-  messages_type?: string | null;
-  message_voice_duration?: number | null;
-  message_command?: string | null;
-  content_length?: number | null;
-
-  usage_model?: string | null;
-  usage_object?: string | null;
-  usage_completion_tokens?: number | null;
-  usage_prompt_tokens?: number | null;
-  usage_total_tokens?: number | null;
-  api_key?: string | null;
-}
-
-interface UserSettings {
-  user_id: number;
-  username: string | null;
-  default_language_code: string | null;
-  language_code: string | null;
-  openai_api_key?: string;
-  usage_type?: string;
-}
-
-interface UserData {
-  settings: UserSettings;
-  openai: OpenAI;
-}
 
 if (fs.existsSync(".env")) {
   dotenv.config();
@@ -95,18 +28,6 @@ if (!process.env.TELEGRAM_BOT_TOKEN || !process.env.OPENAI_API_KEY || !process.e
   );
 }
 
-// Connect to the postgress database
-
-import { Pool, QueryResult } from 'pg';
-// import pkg_pg from 'pg';
-// const { Pool } = pkg_pg;
-
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: {
-    rejectUnauthorized: false
-  }
-});
 
 // Connect to the Pinecone database
 
@@ -228,18 +149,6 @@ function getMessageBufferKey(ctx: MyContext) {
 
 const MAX_MESSAGE_LENGTH = 4096;
 
-// Utility function to send long messages
-async function sendLongMessage(ctx: MyContext, message: string) {
-  if (message.length > MAX_MESSAGE_LENGTH) {
-    for (let i = 0; i < message.length; i += MAX_MESSAGE_LENGTH) {
-      const messagePart = message.substring(i, i + MAX_MESSAGE_LENGTH);
-      await ctx.reply(messagePart);
-    }
-  } else {
-    await ctx.reply(message);
-  }
-}
-
 // Function to handle the response sending logic
 async function handleResponseSending(ctx: MyContext, chatResponse: any) {
   try {
@@ -254,12 +163,6 @@ async function handleResponseSending(ctx: MyContext, chatResponse: any) {
     // Use the utility function to inform the user of an error in a standardized way
     await sendLongMessage(ctx, "An error occurred while processing your request. Please try again later.");
   }
-}
-
-const toLogFormat = (ctx: MyContext, logMessage: string) => {
-  const chat_id = ctx.chat?.id;
-  const username = ctx.from?.username || ctx.from?.id;
-  return `Chat: ${chat_id}, User: ${username}: ${logMessage}`;
 }
 
 for (const createTableQuery of createTableQueries) {
@@ -277,143 +180,6 @@ class NoOpenAiApiKeyError extends Error {
     super(message);
     this.name = 'NoOpenAiApiKeyError';
   }
-}
-
-
-// Database functions
-
-const usedTokensForUser = async (user_id: number): Promise<number> => {
-  const res = await pool.query('SELECT SUM(usage_total_tokens) FROM events WHERE user_id = $1', [user_id]);
-  return res.rows[0].sum || 0;
-};
-
-const selectMessagesByChatIdGPTformat = async (ctx: MyContext) => {
-  if (ctx.chat && ctx.chat.id) {
-    const res = await pool.query(`
-      SELECT role, content 
-      FROM messages 
-      WHERE chat_id = $1 
-        AND is_active = TRUE 
-        AND time >= NOW() - INTERVAL '16 hours' 
-      ORDER BY id
-    `, [ctx.chat.id]);
-    console.log(toLogFormat(ctx, `messages received from the database: ${res.rows.length}`));
-    return res.rows as MyMessage[];
-  } else {
-    throw new Error('ctx.chat.id is undefined');
-  }
-}
-
-const selectUserByUserId = async (user_id: number) => {
-  const res = await pool.query('SELECT * FROM users WHERE user_id = $1', [user_id]);
-  return res.rows[0];
-}
-
-const insertMessage = async ({role, content, chat_id, user_id}: MyMessage) => {
-  const res = await pool.query(`
-    INSERT INTO messages (role, content, chat_id, time, user_id)
-    VALUES ($1, $2, $3, CURRENT_TIMESTAMP, (SELECT id FROM users WHERE user_id = $4))
-    RETURNING *;
-  `, [role, content, chat_id, user_id]);
-  return res.rows[0];
-}
-
-const insertUserOrUpdate = async ({user_id, username, default_language_code, language_code=default_language_code, openai_api_key=null, usage_type}: User) => {
-  try {
-    const res = await pool.query(`
-    INSERT INTO users (user_id, username, default_language_code, language_code, openai_api_key, usage_type, created_at)
-    VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)
-    ON CONFLICT (user_id) DO UPDATE SET
-      username = EXCLUDED.username,
-      default_language_code = EXCLUDED.default_language_code,
-      language_code = EXCLUDED.language_code,
-      openai_api_key = EXCLUDED.openai_api_key,
-      usage_type = EXCLUDED.usage_type,
-      created_at = COALESCE(users.created_at, EXCLUDED.created_at)
-    RETURNING *;
-  `, [user_id, username, default_language_code, language_code, openai_api_key, usage_type]);
-  return res.rows[0];
-  } catch (error) {
-    throw error;
-  }
-}
-const insertEvent = async (event: Event) => {
-  event.time = new Date();
-  try {
-    const res = await pool.query(`
-      INSERT INTO events (
-        time,
-        type,
-  
-        user_id,
-        user_is_bot,
-        user_language_code,
-        user_username,
-  
-        chat_id,
-        chat_type,
-  
-        message_role,
-        messages_type,
-        message_voice_duration,
-        message_command,
-        content_length,
-  
-        usage_model,
-        usage_object,
-        usage_completion_tokens,
-        usage_prompt_tokens,
-        usage_total_tokens,
-        api_key
-      )
-      VALUES (
-        $1, $2,
-        $3, $4, $5, $6,
-        $7, $8,
-        $9, $10, $11, $12, $13,
-        $14, $15, $16, $17, $18, $19
-      )
-      RETURNING *;
-    `, [
-      event.time,
-      event.type,
-  
-      event.user_id,
-      event.user_is_bot,
-      event.user_language_code,
-      event.user_username,
-  
-      event.chat_id,
-      event.chat_type,
-  
-      event.message_role,
-      event.messages_type,
-      event.message_voice_duration,
-      event.message_command,
-      event.content_length,
-  
-      event.usage_model,
-      event.usage_object,
-      event.usage_completion_tokens,
-      event.usage_prompt_tokens,
-      event.usage_total_tokens,
-      event.api_key,
-    ]);
-    return res.rows[0];
-  } catch (error) {
-    throw error;
-  }
-}
-
-
-const deleteMessagesByChatId = async (chat_id: number) => {
-  const res = await pool.query('DELETE FROM messages WHERE chat_id = $1', [chat_id]);
-  return res;
-}
-
-const deactivateMessagesByChatId = async (chat_id: number) => {
-  const res = await pool.query('UPDATE messages SET is_active = FALSE WHERE chat_id = $1', [chat_id]);
-  return res;
 }
 
 
