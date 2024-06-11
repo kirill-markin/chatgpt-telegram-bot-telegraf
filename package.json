@@ -5,7 +5,7 @@
   "author": "Kirill Markin",
   "license": "MIT",
   "scripts": {
-    "start": "ts-node --transpile-only server.ts",
+    "start": "ts-node --transpile-only src/bot.ts",
     "test": "jest"
   },
   "dependencies": {
