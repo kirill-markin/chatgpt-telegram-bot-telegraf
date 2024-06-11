@@ -18,3 +18,11 @@ export const toLogFormat = (ctx: MyContext, logMessage: string) => {
   const username = ctx.from?.username || ctx.from?.id;
   return `Chat: ${chat_id}, User: ${username}: ${logMessage}`;
 }
+
+export const getMessageBufferKey = (ctx: MyContext) => {
+  if (ctx.chat && ctx.from) {
+    return `${ctx.chat.id}:${ctx.from.id}`;
+  } else {
+    throw new Error('ctx.chat.id or ctx.from.id is undefined');
+  }
+}

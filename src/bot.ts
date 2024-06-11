@@ -1,8 +1,7 @@
 import fs from "fs";
 import axios, { AxiosResponse } from 'axios';
 import pTimeout from 'p-timeout';
-import yaml from 'yaml';
-import { Context, session, Telegraf } from "telegraf";
+import { Telegraf } from "telegraf";
 import { message } from "telegraf/filters";
 import ffmpegPath from 'ffmpeg-static';
 import { execFile } from 'child_process';
@@ -10,7 +9,7 @@ import OpenAI from 'openai';
 import { encoding_for_model } from 'tiktoken';
 import { Pinecone } from '@pinecone-database/pinecone';
 import { usedTokensForUser, selectMessagesByChatIdGPTformat, selectUserByUserId, insertMessage, insertUserOrUpdate, insertEvent, deleteMessagesByChatId, deactivateMessagesByChatId } from './database';
-import { sendLongMessage, toLogFormat } from './utils';
+import { sendLongMessage, toLogFormat, getMessageBufferKey } from './utils';
 import { MyContext, MyMessage, User, Event, UserData } from './types';
 import {
   GPT_MODEL,
@@ -28,7 +27,8 @@ import {
   errorString,
   botSettings,
   defaultPrompt,
-  defaultPromptMessage
+  defaultPromptMessage,
+  timeoutMsDefaultchatGPT,
 } from './config';
 
 // Connect to the postgress database
@@ -58,11 +58,11 @@ if (
     try {
       // Initialize the Pinecone client
       const pinecone = new Pinecone({
-        apiKey: process.env.PINECONE_API_KEY
+        apiKey: process.env.PINECONE_API_KEY as string,
       });
 
       // Connect to the Pinecone index
-      pineconeIndex = pinecone.index(process.env.PINECONE_INDEX_NAME);
+      pineconeIndex = pinecone.index(process.env.PINECONE_INDEX_NAME) as string;
 
       console.log('Pinecone database connected');
     } catch (error) {
@@ -133,17 +133,6 @@ const createTableQueries = [
 
 const messageBuffers = new Map();
 
-function getMessageBufferKey(ctx: MyContext) {
-  if (ctx.chat && ctx.from) {
-    return `${ctx.chat.id}:${ctx.from.id}`;
-  } else {
-    throw new Error('ctx.chat.id or ctx.from.id is undefined');
-  }
-}
-
-// utils
-
-const MAX_MESSAGE_LENGTH = 4096;
 
 // Function to handle the response sending logic
 async function handleResponseSending(ctx: MyContext, chatResponse: any) {
@@ -489,10 +478,8 @@ async function saveCommandToDB(ctx: MyContext, command: string) {
 }
 
 
-
 // BOT
 
-const timeoutMsDefaultchatGPT = 6*60*1000;
 const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN, {handlerTimeout: timeoutMsDefaultchatGPT*6});
 
 bot.telegram.getMe().then((botInfo) => {
