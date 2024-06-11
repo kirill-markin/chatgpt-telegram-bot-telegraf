@@ -320,6 +320,9 @@ async function processUserMessageAndRespond(
   // Download all related messages from the database
   let messages: MyMessage[] = await selectMessagesByChatIdGPTformat(ctx);
 
+  // DEBUG: messages to console in a pretty format JSON with newlines
+  // console.log(JSON.stringify(messages, null, 2));
+
   // Send this text to OpenAI's Chat GPT model with retry logic
   const chatResponse: any = await createChatCompletionWithRetryReduceHistoryLongtermMemory(
     ctx,
@@ -353,28 +356,26 @@ async function convertOgaToMp3(fileId: string) {
   });
 }
 
-async function processVoiceMessage(ctx: MyContext, pineconeIndex: any) {
+async function processMessage(ctx: MyContext, messageContent: string, eventType: string, messageType: string, pineconeIndex: any) {
+  console.log(toLogFormat(ctx, `new ${messageType} message received`));
+  
   try {
     const userData = await getUserDataOrReplyWithError(ctx);
     if (!userData) return;
 
     insertEvent({
-      type: 'user_message',
-
+      type: eventType,
       user_id: ctx.from?.id || null,
       user_is_bot: ctx.from?.is_bot || null,
       user_language_code: ctx.from?.language_code || null,
       user_username: ctx.from?.username || null,
-
       chat_id: ctx.chat?.id || null,
       chat_type: ctx.chat?.type || null,
-
       message_role: "user",
-      messages_type: "voice",
-      message_voice_duration: ctx.message?.voice?.duration || null,
+      messages_type: messageType,
+      message_voice_duration: messageType === "voice" ? ctx.message?.voice?.duration : null,
       message_command: null,
-      content_length: null,
-
+      content_length: messageContent.length,
       usage_model: null,
       usage_object: null,
       usage_completion_tokens: null,
@@ -382,31 +383,44 @@ async function processVoiceMessage(ctx: MyContext, pineconeIndex: any) {
       usage_total_tokens: null,
       api_key: null,
     } as Event);
+    console.log(toLogFormat(ctx, `new ${messageType} message saved to the events table`));
+
+    await processUserMessageAndRespond(ctx, messageContent, userData, pineconeIndex);
+
+  } catch (e) {
+    console.error(toLogFormat(ctx, `[ERROR] error occurred: ${e}`));
+    ctx.reply(errorString);
+  }
+}
+
+async function processVoiceMessage(ctx: MyContext, pineconeIndex: any) {
+  try {
+    const userData = await getUserDataOrReplyWithError(ctx);
+    if (!userData) return;
 
     const fileId = ctx.message?.voice?.file_id || null;
     if (!fileId) {
-      throw new Error(`ctx.message.voice.file_id is undefined`);
+      throw new Error("ctx.message.voice.file_id is undefined");
     }
 
     // Download the file
     const url = await ctx.telegram.getFileLink(fileId);
     const response = await axios({ url: url.toString(), responseType: 'stream' });
-
     await new Promise((resolve, reject) => {
       response.data.pipe(fs.createWriteStream(`./${fileId}.oga`))
         .on('error', reject)
         .on('finish', resolve);
     });
-    console.log(toLogFormat(ctx, `voice file downloaded`));
+    console.log(toLogFormat(ctx, "voice file downloaded"));
 
     // Convert the file to mp3
     await convertOgaToMp3(fileId);
-    console.log(toLogFormat(ctx, `voice file converted`));
+    console.log(toLogFormat(ctx, "voice file converted"));
 
     // Send the file to the OpenAI API for transcription
     const transcription = await createTranscriptionWithRetry(fs.createReadStream(`./${fileId}.mp3`), userData.openai);
     const transcriptionText = transcription.text;
-    console.log(toLogFormat(ctx, `voice transcription received`));
+    console.log(toLogFormat(ctx, "voice transcription received"));
 
     // Save the transcription event to the database
     insertEvent({
@@ -436,19 +450,13 @@ async function processVoiceMessage(ctx: MyContext, pineconeIndex: any) {
     console.log(toLogFormat(ctx, `new voice transcription saved to the database`));
 
     // Delete both audio files
-    fs.unlink(`./${fileId}.oga`, (err) => {
-      if (err) {
-        console.error(err);
-      }
-    });
-    fs.unlink(`./${fileId}.mp3`, (err) => {
-      if (err) {
-        console.error(err);
-      }
-    });
-    console.log(toLogFormat(ctx, `voice processing finished`));
+    fs.unlink(`./${fileId}.oga`, (err) => { if (err) console.error(err); });
+    fs.unlink(`./${fileId}.mp3`, (err) => { if (err) console.error(err); });
+    console.log(toLogFormat(ctx, "voice processing finished"));
 
-    await processUserMessageAndRespond(ctx, transcriptionText, userData, pineconeIndex);
+    // Process the transcribed message
+    await processMessage(ctx, transcriptionText, 'user_message', 'voice', pineconeIndex);
+
   } catch (e) {
     console.error(toLogFormat(ctx, `[ERROR] error occurred: ${e}`));
     ctx.reply(errorString);
@@ -456,43 +464,7 @@ async function processVoiceMessage(ctx: MyContext, pineconeIndex: any) {
 }
 
 async function processFullTextMessage(ctx: MyContext, fullMessage: string) {
-  console.log(toLogFormat(ctx, `new message saved to the database`));
-  
-  try {
-    const userData = await getUserDataOrReplyWithError(ctx);
-    if (!userData) return;
-
-    insertEvent({
-      type: 'user_message',
-  
-      user_id: ctx.from?.id || null,
-      user_is_bot: ctx.from?.is_bot || null,
-      user_language_code: ctx.from?.language_code || null,
-      user_username: ctx.from?.username || null,
-  
-      chat_id: ctx.chat?.id || null,
-      chat_type: ctx.chat?.type || null,
-  
-      message_role: "user",
-      messages_type: "text",
-      message_voice_duration: null,
-      message_command: null,
-      content_length: null,
-  
-      usage_model: null,
-      usage_object: null,
-      usage_completion_tokens: null,
-      usage_prompt_tokens: null,
-      usage_total_tokens: null,
-      api_key: null,
-    } as Event);
-
-    await processUserMessageAndRespond(ctx, fullMessage, userData, pineconeIndex);
-
-  } catch (e) {
-    console.error(toLogFormat(ctx, `[ERROR] error occurred: ${e}`));
-    ctx.reply(errorString);
-  }
+  await processMessage(ctx, fullMessage, 'user_message', 'text', pineconeIndex);
 }
 
 bot.on(message('photo'), (ctx: MyContext) => {
