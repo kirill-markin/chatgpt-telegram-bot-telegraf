@@ -131,6 +131,7 @@ export async function createChatCompletionWithRetryReduceHistoryLongtermMemory(c
         .map((message) => message.content)
         .join('\n');
       // Make the embedding request and return the result
+      // FIXME reduce userMessagesText length to 8192 tokens and test
       const resp = await openai.embeddings.create({
         model: 'text-embedding-ada-002',
         input: userMessagesText,
