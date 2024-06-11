@@ -463,10 +463,6 @@ async function processVoiceMessage(ctx: MyContext, pineconeIndex: any) {
   }
 }
 
-async function processFullTextMessage(ctx: MyContext, fullMessage: string) {
-  await processMessage(ctx, fullMessage, 'user_message', 'text', pineconeIndex);
-}
-
 bot.on(message('photo'), (ctx: MyContext) => {
   console.log(toLogFormat(ctx, `photo received`));
   ctx.reply(NO_PHOTO_ERROR);
@@ -560,7 +556,7 @@ bot.on(message('voice'), async (ctx: MyContext) => {
 });
 
 bot.on(message('text'), async (ctx: MyContext) => {
-  console.log(toLogFormat(ctx, `[NEW] text received`));
+  console.log(toLogFormat(ctx, '[NEW] text received'));
   const key = getMessageBufferKey(ctx);
   const messageData = messageBuffers.get(key) || { messages: [], timer: null };
 
@@ -572,11 +568,12 @@ bot.on(message('text'), async (ctx: MyContext) => {
   }
 
   // Set a new timer
-  messageData.timer = setTimeout(() => {
+  messageData.timer = setTimeout(async () => {
     const fullMessage = messageData.messages?.join('\n') || '';
     console.log(toLogFormat(ctx, `full message collected. length: ${fullMessage.length}`));
     messageData.messages = []; // Clear the messages array
-    processFullTextMessage(ctx, fullMessage);
+
+    await processMessage(ctx, fullMessage, 'user_message', 'text', pineconeIndex);
   }, 4000);
 
   // Save the message buffer
