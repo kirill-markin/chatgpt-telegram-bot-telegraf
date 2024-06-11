@@ -6,7 +6,7 @@ import pTimeout from 'p-timeout';
 import { toLogFormat } from './utils';
 import { timeoutMsDefaultchatGPT, GPT_MODEL, maxTokensThresholdToReduceHistory, defaultPromptMessage } from './config';
 import { usedTokensForUser, insertUserOrUpdate, selectUserByUserId } from './database';
-import { maxTrialsTokens } from './config';
+import { maxTrialsTokens, OPENAI_API_KEY } from './config';
 
 class NoOpenAiApiKeyError extends Error {
   constructor(message: string) {
@@ -56,14 +56,14 @@ export async function ensureUserSettingsAndRetrieveOpenAi(ctx: MyContext): Promi
     if (userSettings.openai_api_key) { // custom api key
       console.log(toLogFormat(ctx, `[ACCESS GRANTED] user has custom openai_api_key.`));
     } else if (userSettings.usage_type === 'premium') { // premium user
-      userSettings.openai_api_key = process.env.OPENAI_API_KEY;
+      userSettings.openai_api_key = OPENAI_API_KEY;
       console.log(toLogFormat(ctx, `[ACCESS GRANTED] user is premium but has no custom openai_api_key. openai_api_key set from environment variable.`));
     } else { // no access or trial
       const usedTokens = await usedTokensForUser(user_id);
       if (usedTokens < maxTrialsTokens) {
         userSettings.usage_type = 'trial_active';
         await insertUserOrUpdate(userSettings);
-        userSettings.openai_api_key = process.env.OPENAI_API_KEY;
+        userSettings.openai_api_key = OPENAI_API_KEY;
         console.log(toLogFormat(ctx, `[ACCESS GRANTED] user is trial and user did not exceed the message limit. User used tokens: ${usedTokens} out of ${maxTrialsTokens}. openai_api_key set from environment variable.`));
       } else {
         userSettings.usage_type = 'trial_ended';
@@ -157,6 +157,8 @@ export async function createChatCompletionWithRetryReduceHistoryLongtermMemory(c
         "role": "assistant",
         "content": referenceText,
       } as MyMessage;
+
+      console.log(toLogFormat(ctx, `referenceMessage added to the messages with ${queryResponse.matches.length} matches and ${referenceText.length} characters.`));
     }
 
 

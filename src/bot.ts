@@ -4,7 +4,6 @@ import { Telegraf } from "telegraf";
 import { message } from "telegraf/filters";
 import ffmpegPath from 'ffmpeg-static';
 import { execFile } from 'child_process';
-import { Pinecone } from '@pinecone-database/pinecone';
 import { sendLongMessage, toLogFormat, getMessageBufferKey } from './utils';
 import { MyContext, MyMessage, User, Event, UserData } from './types';
 import { 
@@ -28,58 +27,21 @@ import {
   helpString,
   errorString,
   timeoutMsDefaultchatGPT,
+  TELEGRAM_BOT_TOKEN,
 } from './config';
 import { 
   ensureUserSettingsAndRetrieveOpenAi, 
   createChatCompletionWithRetryReduceHistoryLongtermMemory, 
   createTranscriptionWithRetry 
 } from './openAIFunctions';
-
-// Connect to the postgress database
-import { pool } from './database';
-
 import { initializeDatabase } from './databaseInit';
 
-
-if (!process.env.TELEGRAM_BOT_TOKEN || !process.env.OPENAI_API_KEY || !process.env.DATABASE_URL) {
-  throw new Error(
-    "Please set the TELEGRAM_BOT_TOKEN and OPENAI_API_KEY and DATABASE_URL environment variables"
-  );
-}
-
-
-// Connect to the Pinecone database
-
-let pineconeIndex: any = null;
-
-// Check if process.env.PINECONE_API_KEY is a string 
-// and process.env.PINECONE_INDEX_NAME is a string and they are not empty
-if (
-  typeof process.env.PINECONE_API_KEY == 'string' 
-  && typeof process.env.PINECONE_INDEX_NAME == 'string' 
-  && process.env.PINECONE_API_KEY 
-  && process.env.PINECONE_INDEX_NAME
-) {
-  (async () => {
-    try {
-      // Initialize the Pinecone client
-      const pinecone = new Pinecone({
-        apiKey: process.env.PINECONE_API_KEY,
-      });
-
-      // Connect to the Pinecone index
-      pineconeIndex = pinecone.index(process.env.PINECONE_INDEX_NAME);
-
-      console.log('Pinecone database connected');
-    } catch (error) {
-      console.error('Error connecting to Pinecone:', error);
-    }
-  })();
-} else {
-  console.log('Pinecone database not connected');
-}
+// Connect to databases
+import { pool } from './database';
+import { pineconeIndex } from './vectorDatabase';
 
 initializeDatabase();
+
 
 // Create a map to store the message buffers
 
@@ -112,7 +74,7 @@ class NoOpenAiApiKeyError extends Error {
 
 // BOT
 
-const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN, {handlerTimeout: timeoutMsDefaultchatGPT*6});
+const bot = new Telegraf(TELEGRAM_BOT_TOKEN, {handlerTimeout: timeoutMsDefaultchatGPT*6});
 
 bot.telegram.getMe().then((botInfo) => {
   bot.options.username = botInfo.username;
@@ -171,20 +133,20 @@ bot.use(async (ctx: MyContext, next) => {
   console.log(toLogFormat(ctx, `message processed. Response time: ${ms / 1000} seconds.`));
 });
 
-bot.start((ctx: MyContext) => {
-  console.log(toLogFormat(ctx, `/start command received`));
+bot.start(async (ctx: MyContext) => {
+  console.log(toLogFormat(ctx, 'start command received'));
   if (ctx.from && ctx.from.id) {
-    insertUserOrUpdate({
+    await insertUserOrUpdate({
       user_id: ctx.from.id,
       username: ctx.from?.username || null,
       default_language_code: ctx.from.language_code,
       language_code: ctx.from.language_code,
     } as User);
-    console.log(toLogFormat(ctx, `user saved to the database`));
+    console.log(toLogFormat(ctx, 'user saved to the database'));
   } else {
-    throw new Error(`ctx.from.id is undefined`);
+    throw new Error('ctx.from.id is undefined');
   }
-  ctx.reply(helpString)
+  ctx.reply(helpString);
 });
 
 bot.help((ctx: MyContext) => {
@@ -248,7 +210,7 @@ async function processUserMessageAndRespond(
   let messages: MyMessage[] = await selectMessagesByChatIdGPTformat(ctx);
 
   // DEBUG: messages to console in a pretty format JSON with newlines
-  console.log(JSON.stringify(messages, null, 2));
+  // console.log(JSON.stringify(messages, null, 2));
 
   // Send this text to OpenAI's Chat GPT model with retry logic
   const chatResponse: any = await createChatCompletionWithRetryReduceHistoryLongtermMemory(

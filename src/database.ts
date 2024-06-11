@@ -1,16 +1,13 @@
-import dotenv from "dotenv";
-import fs from "fs";
 import { Pool, QueryResult } from 'pg';
 import { MyContext, MyMessage, User, Event, UserData } from './types';
 import { toLogFormat } from './utils';
-import { NO_ANSWER_ERROR } from './config.ts';
+import { DATABASE_URL, NO_ANSWER_ERROR } from './config';
 
-if (fs.existsSync(".env")) {
-  dotenv.config();
+if (typeof DATABASE_URL !== 'string') {
+  throw new Error('DATABASE_URL is not defined');
 }
-
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString: DATABASE_URL,
   ssl: {
     rejectUnauthorized: false
   }
