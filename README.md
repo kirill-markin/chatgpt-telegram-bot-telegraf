@@ -9,6 +9,10 @@ https://t.me/chat_gpt_ai_open_source_bot
 
 Feel free to interact with the bot and test its capabilities!
 
+## Cloud Deployment
+
+[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/template/6T8UU3?referralCode=ln-goT)
+
 ## Features
 
 - **Text and Voice Message Processing**: Handles both text and voice messages, converting voice to text for processing.
