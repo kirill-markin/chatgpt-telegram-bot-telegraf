@@ -7,17 +7,17 @@ if (fs.existsSync(".env")) {
   dotenv.config();
 }
 
-export const DATABASE_URL = process.env.DATABASE_URL;
-export const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-export const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-
 if (
-  typeof OPENAI_API_KEY !== 'string' ||
-  typeof DATABASE_URL !== 'string' ||
-  typeof TELEGRAM_BOT_TOKEN !== 'string'
+  typeof process.env.OPENAI_API_KEY !== 'string' ||
+  typeof process.env.DATABASE_URL !== 'string' ||
+  typeof process.env.TELEGRAM_BOT_TOKEN !== 'string'
 ) {
   throw new Error('OPENAI_API_KEY and DATABASE_URL and TELEGRAM_BOT_TOKEN must be defined');
 }
+
+export const DATABASE_URL : string = process.env.DATABASE_URL;
+export const OPENAI_API_KEY : string = process.env.OPENAI_API_KEY;
+export const TELEGRAM_BOT_TOKEN : string = process.env.TELEGRAM_BOT_TOKEN;
 
 export const PINECONE_API_KEY = process.env.PINECONE_API_KEY;
 export const PINECONE_INDEX_NAME = process.env.PINECONE_INDEX_NAME;

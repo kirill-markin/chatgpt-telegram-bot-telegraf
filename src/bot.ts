@@ -40,8 +40,7 @@ import { initializeDatabase } from './databaseInit';
 import { pool } from './database';
 import { pineconeIndex } from './vectorDatabase';
 
-initializeDatabase();
-
+let bot: Telegraf | undefined;
 
 // Create a map to store the message buffers
 
@@ -70,109 +69,6 @@ class NoOpenAiApiKeyError extends Error {
     this.name = 'NoOpenAiApiKeyError';
   }
 }
-
-
-// BOT
-
-const bot = new Telegraf(TELEGRAM_BOT_TOKEN, {handlerTimeout: timeoutMsDefaultchatGPT*6});
-
-bot.telegram.getMe().then((botInfo) => {
-  bot.options.username = botInfo.username;
-})
-
-const waitAndLog = async (stopSignal: any, func: any) => {
-  while (!stopSignal()) {
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    try {
-      func();
-    } catch (error) {
-      console.error(error);
-    }
-  }
-};
-
-bot.use(async (ctx: MyContext, next) => {
-  const start = new Date();
-
-  let isNextDone = false;
-  const stopSignal = () => isNextDone;
-
-  // Start waiting and logging in parallel
-  let sendChatActionTyping = async () => {};
-  let chatId: number = -1;
-  if (ctx.chat && ctx.chat.id) {
-    chatId = ctx.chat.id;
-  } else {
-    throw new Error(`ctx.chat.id is undefined`);
-  }
-
-  if (chatId !== -1) {
-    sendChatActionTyping = async () => {
-      try {
-        await ctx.telegram.sendChatAction(chatId, 'typing');
-      } catch (error) {
-        if (error.response && error.response.error_code === 403) {
-          console.log(`User ${chatId} has blocked the bot.`);
-        } else {
-          console.error('Unexpected error:', error);
-        }
-      }
-    };
-  }
-
-  const waitPromise = waitAndLog(stopSignal, sendChatActionTyping);
-
-  // Wait for next() to complete
-  await next();
-  isNextDone = true;
-
-  // Wait for waitAndLog to finish
-  await waitPromise;
-
-  const ms = new Date().getTime() - start.getTime();
-  console.log(toLogFormat(ctx, `message processed. Response time: ${ms / 1000} seconds.`));
-});
-
-bot.start(async (ctx: MyContext) => {
-  console.log(toLogFormat(ctx, 'start command received'));
-  if (ctx.from && ctx.from.id) {
-    await insertUserOrUpdate({
-      user_id: ctx.from.id,
-      username: ctx.from?.username || null,
-      default_language_code: ctx.from.language_code,
-      language_code: ctx.from.language_code,
-    } as User);
-    console.log(toLogFormat(ctx, 'user saved to the database'));
-  } else {
-    throw new Error('ctx.from.id is undefined');
-  }
-  ctx.reply(helpString);
-});
-
-bot.help((ctx: MyContext) => {
-  ctx.reply(helpString)
-});
-
-bot.command('reset', (ctx: MyContext) => {
-  console.log(toLogFormat(ctx, `/reset command received`));
-  if (ctx.chat && ctx.chat.id) {
-    deactivateMessagesByChatId(ctx.chat.id);
-  } else {
-    throw new Error(`ctx.chat.id is undefined`);
-  }
-  console.log(toLogFormat(ctx, `messages deleted from database`));
-  ctx.reply(RESET_MESSAGE)
-  saveCommandToDB(ctx, 'reset');
-});
-
-// TODO: update user settings and openAIKey
-// bot.command('settings', (ctx: MyContext) => {
-//   ctx.state.command = { raw: '/settings' };
-//   console.log(ctx)
-//   console.log(toLogFormat(ctx, `/settings command received`));
-  
-//   saveCommandToDB(ctx, 'settings');
-// });
 
 async function getUserDataOrReplyWithError(ctx: MyContext): Promise<UserData | null> {
   try {
@@ -309,6 +205,109 @@ async function processVoiceMessage(ctx: MyContext, pineconeIndex: any) {
   }
 }
 
+
+// Telegram bot
+
+bot = new Telegraf(TELEGRAM_BOT_TOKEN, {handlerTimeout: timeoutMsDefaultchatGPT*6});
+
+bot.telegram.getMe().then((botInfo) => {
+  bot.options.username = botInfo.username;
+})
+
+const waitAndLog = async (stopSignal: any, func: any) => {
+  while (!stopSignal()) {
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    try {
+      func();
+    } catch (error) {
+      console.error(error);
+    }
+  }
+};
+
+bot.use(async (ctx: MyContext, next) => {
+  const start = new Date();
+
+  let isNextDone = false;
+  const stopSignal = () => isNextDone;
+
+  // Start waiting and logging in parallel
+  let sendChatActionTyping = async () => {};
+  let chatId: number = -1;
+  if (ctx.chat && ctx.chat.id) {
+    chatId = ctx.chat.id;
+  } else {
+    throw new Error(`ctx.chat.id is undefined`);
+  }
+
+  if (chatId !== -1) {
+    sendChatActionTyping = async () => {
+      try {
+        await ctx.telegram.sendChatAction(chatId, 'typing');
+      } catch (error) {
+        if (error.response && error.response.error_code === 403) {
+          console.log(`User ${chatId} has blocked the bot.`);
+        } else {
+          console.error('Unexpected error:', error);
+        }
+      }
+    };
+  }
+
+  const waitPromise = waitAndLog(stopSignal, sendChatActionTyping);
+
+  // Wait for next() to complete
+  await next();
+  isNextDone = true;
+
+  // Wait for waitAndLog to finish
+  await waitPromise;
+
+  const ms = new Date().getTime() - start.getTime();
+  console.log(toLogFormat(ctx, `message processed. Response time: ${ms / 1000} seconds.`));
+});
+
+bot.start(async (ctx: MyContext) => {
+  console.log(toLogFormat(ctx, 'start command received'));
+  if (ctx.from && ctx.from.id) {
+    await insertUserOrUpdate({
+      user_id: ctx.from.id,
+      username: ctx.from?.username || null,
+      default_language_code: ctx.from.language_code,
+      language_code: ctx.from.language_code,
+    } as User);
+    console.log(toLogFormat(ctx, 'user saved to the database'));
+  } else {
+    throw new Error('ctx.from.id is undefined');
+  }
+  ctx.reply(helpString);
+});
+
+bot.help((ctx: MyContext) => {
+  ctx.reply(helpString)
+});
+
+bot.command('reset', (ctx: MyContext) => {
+  console.log(toLogFormat(ctx, `/reset command received`));
+  if (ctx.chat && ctx.chat.id) {
+    deactivateMessagesByChatId(ctx.chat.id);
+  } else {
+    throw new Error(`ctx.chat.id is undefined`);
+  }
+  console.log(toLogFormat(ctx, `messages deleted from database`));
+  ctx.reply(RESET_MESSAGE)
+  saveCommandToDB(ctx, 'reset');
+});
+
+// TODO: update user settings and openAIKey
+// bot.command('settings', (ctx: MyContext) => {
+//   ctx.state.command = { raw: '/settings' };
+//   console.log(ctx)
+//   console.log(toLogFormat(ctx, `/settings command received`));
+  
+//   saveCommandToDB(ctx, 'settings');
+// });
+
 bot.on(message('photo'), (ctx: MyContext) => {
   console.log(toLogFormat(ctx, `photo received`));
   ctx.reply(NO_PHOTO_ERROR);
@@ -357,7 +356,17 @@ bot.on(message('text'), async (ctx: MyContext) => {
   messageBuffers.set(key, messageData);
 });
 
-bot.launch();
-console.log('Bot started');
+
+const startBot = async () => {
+  await initializeDatabase();
+  console.log('Database initialization complete. Starting bot...');
+
+  bot.launch();
+  console.log('Bot started');
+};
+
+startBot().catch(err => {
+  console.error('Failed to start the bot', err);
+});
 
 export default bot;
