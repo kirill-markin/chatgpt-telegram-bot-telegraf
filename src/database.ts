@@ -50,7 +50,7 @@ export const insertMessage = async ({role, content, chat_id, user_id}: MyMessage
   return res.rows[0];
 }
 
-export const insertUserOrUpdate = async ({user_id, username, default_language_code, language_code=default_language_code, openai_api_key=null, usage_type}: User) => {
+export const insertUserOrUpdate = async ({user_id, username, default_language_code, language_code=default_language_code, openai_api_key=null, usage_type=null}: User) => {
   try {
     const res = await pool.query(`
     INSERT INTO users (user_id, username, default_language_code, language_code, openai_api_key, usage_type, created_at)
@@ -59,8 +59,8 @@ export const insertUserOrUpdate = async ({user_id, username, default_language_co
       username = EXCLUDED.username,
       default_language_code = EXCLUDED.default_language_code,
       language_code = EXCLUDED.language_code,
-      openai_api_key = EXCLUDED.openai_api_key,
-      usage_type = EXCLUDED.usage_type,
+      openai_api_key = COALESCE(EXCLUDED.openai_api_key, users.openai_api_key),
+      usage_type = COALESCE(EXCLUDED.usage_type, users.usage_type),
       created_at = COALESCE(users.created_at, EXCLUDED.created_at)
     RETURNING *;
   `, [user_id, username, default_language_code, language_code, openai_api_key, usage_type]);
