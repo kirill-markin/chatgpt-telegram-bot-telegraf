@@ -2,6 +2,13 @@
 
 ChatGPT Telegram Bot via Telegraf is an advanced Telegram bot designed to provide seamless text and voice interactions using OpenAI's ChatGPT. Built with the Telegraf framework, this bot allows users to ask ChatGPT questions via voice messages and receive text responses. Ideal for enhancing user engagement, customer support, and more, this bot leverages PostgreSQL for data storage and can integrate with Pinecone vector database to improve the quality of answers by utilizing long-term memory.
 
+## Demo ChatGPT Telegram Bot
+
+Telegram Bot from this repository is available at:
+https://t.me/chat_gpt_ai_open_source_bot
+
+Feel free to interact with the bot and test its capabilities!
+
 ## Features
 
 - **Text and Voice Message Processing**: Handles both text and voice messages, converting voice to text for processing.
