@@ -1,9 +1,8 @@
 import OpenAI from 'openai';
 import { MyContext, MyMessage, UserData } from './types';
 import { AxiosResponse } from 'axios';
-import { encoding_for_model } from 'tiktoken';
 import pTimeout from 'p-timeout';
-import { toLogFormat } from './utils';
+import { toLogFormat, encodeText, decodeTokens } from './utils';
 import { timeoutMsDefaultchatGPT, GPT_MODEL, maxTokensThresholdToReduceHistory, defaultPromptMessage } from './config';
 import { usedTokensForUser, insertUserOrUpdate, selectUserByUserId } from './database';
 import { maxTrialsTokens, OPENAI_API_KEY } from './config';
@@ -117,25 +116,58 @@ async function createChatCompletionWithRetry(messages: MyMessage[], openai: Open
   }
 }
 
-export async function createChatCompletionWithRetryReduceHistoryLongtermMemory(ctx: MyContext, messages: MyMessage[], openai: OpenAI, pineconeIndex: any, retries = 5, timeoutMs = timeoutMsDefaultchatGPT): Promise<AxiosResponse<OpenAI.Chat.Completions.ChatCompletion, any> | undefined> {
-  try {
-    // Add longterm memory to the messages based on pineconeIndex
+export function reduceHistoryWithTokenLimit(
+  messages: MyMessage[],
+  maxTokens: number,
+): MyMessage[] {
+  let totalTokenCount = 0;
 
-    let referenceMessageObj: any = undefined;
+  const messagesCleaned = messages.reduceRight<MyMessage[]>((acc, message) => {
+    const tokens = encodeText(message.content);
+    if (totalTokenCount + tokens.length <= maxTokens) {
+      acc.unshift(message); // Prepend to keep the original order
+      totalTokenCount += tokens.length;
+    } else {
+      const tokensAvailable = maxTokens - totalTokenCount;
+      if (tokensAvailable > 0) {
+        const partialTokens = tokens.slice(-tokensAvailable);
+        const partialContent = decodeTokens(partialTokens);
+        acc.unshift({ ...message, content: partialContent });
+        totalTokenCount += tokensAvailable;
+      }
+      return acc;
+    }
+    return acc;
+  }, []);
+
+  return messagesCleaned;
+}
+
+export async function createChatCompletionWithRetryReduceHistoryLongtermMemory(
+  ctx: MyContext,
+  messages: MyMessage[],
+  openai: OpenAI,
+  pineconeIndex: any,
+  retries = 5,
+  timeoutMs = timeoutMsDefaultchatGPT
+): Promise<AxiosResponse<OpenAI.Chat.Completions.ChatCompletion, any> | undefined> {
+  try {
+    // Add long-term memory to the messages based on pineconeIndex
+    let referenceMessageObj: MyMessage | undefined = undefined;
     if (pineconeIndex) {
-      // Get embeddings for last user messages
-      const lastMessagesThreshold = 4;
-      const userMessagesText = messages
-        .filter((message) => message?.role === "user")
-        .slice(-lastMessagesThreshold)
-        .map((message) => message.content)
-        .join('\n');
+      const userMessages = messages.filter((message) => message.role === "user");
+      const maxContentLength: number = 8192 - userMessages.length; // to add '\n' between messages
       // Make the embedding request and return the result
-      // FIXME reduce userMessagesText length to 8192 tokens and test
+      const userMessagesCleaned = reduceHistoryWithTokenLimit(
+        userMessages,
+        maxContentLength,
+      )
+      const userMessagesCleanedText = userMessagesCleaned.map((message) => message.content).join('\n');
+
       const resp = await openai.embeddings.create({
         model: 'text-embedding-ada-002',
-        input: userMessagesText,
-      })
+        input: userMessagesCleanedText,
+      });
       const embedding = resp?.data?.[0]?.embedding || null;
 
       const queryRequest = {
@@ -144,101 +176,65 @@ export async function createChatCompletionWithRetryReduceHistoryLongtermMemory(c
         includeValues: false,
         includeMetadata: true,
       };
-      const queryResponse = await pineconeIndex.query( queryRequest );
+      const queryResponse = await pineconeIndex.query(queryRequest);
 
-      // TODO: add wiki URLs to the referenceMessage from metadata.source
+      const referenceText = 
+        "Related to this conversation document parts:\n" + 
+        queryResponse.matches.map((match: any) => match.metadata.text).join('\n');
 
-      const referenceText =
-        "Related to this conversation document parts:\n" 
-        + queryResponse.matches.map(
-            (match: any) => match.metadata.text
-          ).join('\n');
-      
       referenceMessageObj = {
-        "role": "assistant",
-        "content": referenceText,
+        role: "assistant",
+        content: referenceText,
       } as MyMessage;
 
       console.log(toLogFormat(ctx, `referenceMessage added to the messages with ${queryResponse.matches.length} matches and ${referenceText.length} characters.`));
     }
 
-
-    // Reduce history using tokens, but consider defaultPrompt and referenceMessage lengths
-
-    const encoder = encoding_for_model('gpt-3.5-turbo'); // or 'gpt-4' if it's available
-
-    // Define your token threshold here
-    const tokenThreshold = maxTokensThresholdToReduceHistory;
-    let totalTokenCount = 0;
-
     // Tokenize and account for default prompt and reference message
-    const defaultPromptTokens = defaultPromptMessageObj ? encoder.encode(defaultPromptMessageObj.content) : [];
-    const referenceMessageTokens = referenceMessageObj ? encoder.encode(referenceMessageObj.content) : [];
+    const defaultPromptTokens = defaultPromptMessageObj ? encodeText(defaultPromptMessageObj.content) : new Uint32Array();
+    const referenceMessageTokens = referenceMessageObj ? encodeText(referenceMessageObj.content) : new Uint32Array();
 
-    // Adjust tokenThreshold to account for the default prompt and reference message
-    const adjustedTokenThreshold = tokenThreshold - defaultPromptTokens.length - referenceMessageTokens.length;
-
-    // Check if adjustedTokenThreshold is valid
+    const adjustedTokenThreshold = maxTokensThresholdToReduceHistory - defaultPromptTokens.length - referenceMessageTokens.length;
     if (adjustedTokenThreshold <= 0) {
-      encoder.free(); // Free the encoder before throwing error
-      throw new Error('Token threshold exceeded by default prompt and reference message. Max token threshold: ' + tokenThreshold + ', default prompt length: ' + defaultPromptTokens.length + ', reference message length: ' + referenceMessageTokens.length);
+      throw new Error('Token threshold exceeded by default prompt and reference message.');
     }
+    console.log(toLogFormat(ctx, `adjustedTokenThreshold: ${adjustedTokenThreshold}`));
 
-    // Tokenize messages and calculate total token count
-    let messagesCleaned = messages.reduceRight<MyMessage[]>((acc, message) => {
-      const tokens = encoder.encode(message.content);
-      if (totalTokenCount + tokens.length <= adjustedTokenThreshold) {
-        acc.unshift(message); // Prepend to keep the original order
-        totalTokenCount += tokens.length;
-      } else {
-        // When we can't add the entire message, we need to add a truncated part of it
-        const tokensAvailable = adjustedTokenThreshold - totalTokenCount;
-        if (tokensAvailable > 0) {
-          // We can include a part of this message
-          // Take tokens from the end instead of the start
-          const partialTokens = tokens.slice(-tokensAvailable);
-          const partialContentArray = encoder.decode(partialTokens);
-          // Convert Uint8Array to string
-          const partialContent = new TextDecoder().decode(partialContentArray);
-          acc.unshift({ ...message, content: partialContent });
-          totalTokenCount += tokensAvailable; // This should now equal adjustedTokenThreshold
-        }
-        // Once we've hit the token limit, we don't add any more messages
-        return acc;
-      }
-      return acc;
-    }, []);
+    // Reduce history using tokens
+    const messagesCleaned = reduceHistoryWithTokenLimit(
+      messages,
+      adjustedTokenThreshold,
+    );
 
-    if (messages.length !== messagesCleaned.length) {  
-      console.log(toLogFormat(ctx, `messages reduced, totalTokenCount: ${totalTokenCount} from adjustedTokenThreshold: ${adjustedTokenThreshold}. Original message count: ${messages.length}, reduced message count: ${messagesCleaned.length}.`));
-    } else {
-      console.log(toLogFormat(ctx, `messages not reduced, totalTokenCount: ${totalTokenCount} from adjustedTokenThreshold: ${adjustedTokenThreshold}.`));
-    }
+    // DEBUG: Uncomment to see hidden and user messages in logs
+    // console.log(`messagesCleaned: ${JSON.stringify(messagesCleaned, null, 2)}`);
 
-    encoder.free(); // Free the encoder when done
-
-
-    let finalMessages = [defaultPromptMessageObj]
+    let finalMessages = [defaultPromptMessageObj].filter(Boolean); // Ensure we don't include undefined
     if (referenceMessageObj) {
       finalMessages.push(referenceMessageObj);
     }
     finalMessages = finalMessages.concat(messagesCleaned);
 
-    // TODO: Uncomment to see hidden and user messages in logs
-    // console.log(JSON.stringify(finalMessages, null, 2));
+    // Calculate the total length of tokens for messagesCleaned
+    const messagesCleanedTokens = messagesCleaned.map((message) => encodeText(message.content));
+    const messagesCleanedTokensTotalLength = messagesCleanedTokens.reduce((sum, tokens) => sum + tokens.length, 0);
+    
+    console.log(toLogFormat(ctx, `defaultPromptTokens: ${defaultPromptTokens.length}, referenceMessageTokens: ${referenceMessageTokens.length}, messagesCleanedTokens: ${messagesCleanedTokensTotalLength}, total: ${defaultPromptTokens.length + referenceMessageTokens.length + messagesCleanedTokensTotalLength} tokens.`));
+
+    // DEBUG: Uncomment to see hidden and user messages in logs
+    // console.log(`finalMessages: ${JSON.stringify(finalMessages, null, 2)}`);
 
     const chatGPTAnswer = await createChatCompletionWithRetry(
-      messages = finalMessages,
+      finalMessages,
       openai,
       retries,
-      timeoutMs,
+      timeoutMs
     );
     return chatGPTAnswer as AxiosResponse<OpenAI.Chat.Completions.ChatCompletion, any> | undefined;
   } catch (error) {
     throw error;
   }
 }
-
 export function createTranscriptionWithRetry(fileStream: File, openai: OpenAI, retries = 3): Promise<any> {
   return openai.audio.transcriptions.create({ model: "whisper-1", file: fileStream })
     .catch((error) => {
