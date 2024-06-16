@@ -1,4 +1,5 @@
 import { MyContext } from './types';
+import { encoding_for_model, TiktokenModel } from 'tiktoken';
 
 const MAX_MESSAGE_LENGTH = 4096;
 
@@ -25,4 +26,18 @@ export const getMessageBufferKey = (ctx: MyContext) => {
   } else {
     throw new Error('ctx.chat.id or ctx.from.id is undefined');
   }
+}
+
+export function encodeText(text: string, model: TiktokenModel = 'gpt-3.5-turbo'): Uint32Array {
+  const encoder = encoding_for_model(model);
+  const tokens = encoder.encode(text);
+  encoder.free(); // Free the encoder when done
+  return tokens;
+}
+
+export function decodeTokens(tokens: Uint32Array, model: TiktokenModel = 'gpt-3.5-turbo'): string {
+  const encoder = encoding_for_model(model);
+  const text = encoder.decode(tokens);
+  encoder.free(); // Free the encoder when done
+  return new TextDecoder().decode(text);
 }
