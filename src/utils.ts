@@ -1,5 +1,13 @@
 import { MyContext } from './types';
 import { encoding_for_model, TiktokenModel } from 'tiktoken';
+import { 
+  NO_ANSWER_ERROR,
+  TRIAL_ENDED_ERROR,
+ } from './config';
+import { 
+  ensureUserSettingsAndRetrieveOpenAi,
+} from './openAIFunctions';
+import { UserData } from './types';
 
 const MAX_MESSAGE_LENGTH = 4096;
 
@@ -40,4 +48,41 @@ export function decodeTokens(tokens: Uint32Array, model: TiktokenModel = 'gpt-3.
   const text = encoder.decode(tokens);
   encoder.free(); // Free the encoder when done
   return new TextDecoder().decode(text);
+}
+
+// Function to handle the response sending logic
+export async function handleResponseSending(ctx: MyContext, chatResponse: any) {
+  try {
+    let answer = chatResponse?.choices?.[0]?.message?.content ?? NO_ANSWER_ERROR;
+    
+    // Use the utility function to send the answer, whether it's long or short
+    await sendLongMessage(ctx, answer);
+  
+    console.log(toLogFormat(ctx, 'answer sent to the user'));
+  } catch (e) {
+    console.error(toLogFormat(ctx, `[ERROR] error in sending the answer to the user: ${e}`));
+    // Use the utility function to inform the user of an error in a standardized way
+    await sendLongMessage(ctx, "An error occurred while processing your request. Please try again later.");
+  }
+}
+
+class NoOpenAiApiKeyError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'NoOpenAiApiKeyError';
+  }
+}
+
+export async function getUserDataOrReplyWithError(ctx: MyContext): Promise<UserData | null> {
+  try {
+    const userData = await ensureUserSettingsAndRetrieveOpenAi(ctx);
+    return userData;
+  } catch (e) {
+    if (e instanceof NoOpenAiApiKeyError) {
+      await ctx.reply(TRIAL_ENDED_ERROR);
+      return null;
+    } else {
+      throw e;
+    }
+  }
 }
