@@ -4,13 +4,17 @@ import { Telegraf } from "telegraf";
 import { message } from "telegraf/filters";
 import ffmpegPath from 'ffmpeg-static';
 import { execFile } from 'child_process';
-import { sendLongMessage, toLogFormat, getMessageBufferKey } from './utils';
-import { MyContext, MyMessage, User, Event, UserData } from './types';
+import { 
+  toLogFormat, 
+  getMessageBufferKey,
+  handleResponseSending,
+  getUserDataOrReplyWithError,
+ } from './utils';
+import { MyContext, MyMessage, User, UserData } from './types';
 import { 
   selectMessagesByChatIdGPTformat, 
   insertMessage, 
   insertUserOrUpdate, 
-  insertEvent, 
   deactivateMessagesByChatId,
   insertEventSimple,
   insertEventViaMessageType,
@@ -20,17 +24,14 @@ import {
 } from './database';
 import {
   RESET_MESSAGE,
-  TRIAL_ENDED_ERROR,
   NO_PHOTO_ERROR,
   NO_VIDEO_ERROR,
-  NO_ANSWER_ERROR,
   helpString,
   errorString,
   timeoutMsDefaultchatGPT,
   TELEGRAM_BOT_TOKEN,
 } from './config';
 import { 
-  ensureUserSettingsAndRetrieveOpenAi, 
   createChatCompletionWithRetryReduceHistoryLongtermMemory, 
   createTranscriptionWithRetry 
 } from './openAIFunctions';
@@ -45,44 +46,6 @@ let bot: Telegraf | undefined;
 // Create a map to store the message buffers
 
 const messageBuffers = new Map();
-
-
-// Function to handle the response sending logic
-async function handleResponseSending(ctx: MyContext, chatResponse: any) {
-  try {
-    let answer = chatResponse?.choices?.[0]?.message?.content ?? NO_ANSWER_ERROR;
-    
-    // Use the utility function to send the answer, whether it's long or short
-    await sendLongMessage(ctx, answer);
-  
-    console.log(toLogFormat(ctx, 'answer sent to the user'));
-  } catch (e) {
-    console.error(toLogFormat(ctx, `[ERROR] error in sending the answer to the user: ${e}`));
-    // Use the utility function to inform the user of an error in a standardized way
-    await sendLongMessage(ctx, "An error occurred while processing your request. Please try again later.");
-  }
-}
-
-class NoOpenAiApiKeyError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'NoOpenAiApiKeyError';
-  }
-}
-
-async function getUserDataOrReplyWithError(ctx: MyContext): Promise<UserData | null> {
-  try {
-    const userData = await ensureUserSettingsAndRetrieveOpenAi(ctx);
-    return userData;
-  } catch (e) {
-    if (e instanceof NoOpenAiApiKeyError) {
-      await ctx.reply(TRIAL_ENDED_ERROR);
-      return null;
-    } else {
-      throw e;
-    }
-  }
-}
 
 async function processUserMessageAndRespond(
   ctx: MyContext, 
