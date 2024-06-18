@@ -5,7 +5,7 @@ ChatGPT Telegram Bot via Telegraf is an advanced Telegram bot designed to provid
 ## Demo ChatGPT Telegram Bot
 
 Telegram Bot from this repository is available at:  
-https://t.me/chat_gpt_ai_open_source_bot
+<https://t.me/chat_gpt_ai_open_source_bot>
 
 Feel free to interact with the bot and test its capabilities!
 
