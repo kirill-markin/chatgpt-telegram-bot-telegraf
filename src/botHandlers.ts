@@ -13,7 +13,7 @@ import {
   NO_VIDEO_ERROR,
   helpString,
 } from './config';
-import { processMessage, processVoiceMessage } from './messageHandlers';
+import { processMessage, processVoiceMessage, processAudioFile } from './messageHandlers';
 import { toLogFormat, getMessageBufferKey } from './utils';
 import { pineconeIndex } from './vectorDatabase';
 
@@ -21,6 +21,7 @@ import { pineconeIndex } from './vectorDatabase';
 const messageBuffers = new Map();
 
 export function setupBotHandlers(bot: Telegraf<MyContext>) {
+
   bot.start(async (ctx: MyContext) => {
     console.log(toLogFormat(ctx, 'start command received'));
     if (ctx.from && ctx.from.id) {
@@ -106,24 +107,27 @@ export function setupBotHandlers(bot: Telegraf<MyContext>) {
     const fileName = ctx.message.document?.file_name;
     const mimeType = ctx.message.document?.mime_type;
 
-    if (fileId) {
-      console.log(toLogFormat(ctx, `File received: ${fileName} (${mimeType})`));
-      ctx.reply(`Received file: ${fileName} with MIME type: ${mimeType}`);
+    if (fileId && mimeType) {
+      if (mimeType.startsWith('audio/')) {
+        await processAudioFile(ctx, fileId, mimeType, pineconeIndex);
+      } else {
+        console.log(toLogFormat(ctx, `File received: ${fileName} (${mimeType})`));
+        ctx.reply(`Received file: ${fileName} with MIME type: ${mimeType}`);
+      }
     } else {
-      console.error(toLogFormat(ctx, 'Received file, but file_id is undefined'));
+      console.error(toLogFormat(ctx, 'Received file, but file_id or mimeType is undefined'));
     }
   });
 
   bot.on(message('audio'), async (ctx: MyContext) => {
     const fileId = ctx.message.audio?.file_id;
-    const fileName = ctx.message.audio?.file_name;
     const mimeType = ctx.message.audio?.mime_type;
 
-    if (fileId) {
-      console.log(toLogFormat(ctx, `Audio file received: ${fileName} (${mimeType})`));
-      ctx.reply(`Received audio file: ${fileName} with MIME type: ${mimeType}`);
+    if (fileId && mimeType) {
+      await processAudioFile(ctx, fileId, mimeType, pineconeIndex);
     } else {
-      console.error(toLogFormat(ctx, 'Received audio file, but file_id is undefined'));
+      console.error(toLogFormat(ctx, 'Received audio file, but file_id or mimeType is undefined'));
     }
   });
+
 }
