@@ -5,7 +5,6 @@ strings:
   reset_message: "Old messages have been deleted from the bot's memory in this chat."
   no_openai_key_error: "You don't seem to be on the list of allowed users. Tell Kirill to fix it. Kirill's Telegram: @kirmark"
   trial_ended_error: "It seems that the trial access to the bot has expired. Tell Kirill to issue access. Kirill's Telegram: @kirmark"
-  no_photo_error: "The robot doesn't know how to handle photos yet and will ignore this message."
   no_video_error: "The robot doesn't know how to handle video yet and will ignore this message."
   no_answer_error: "The robot couldn't find the answer to your question. Tell Kirill to fix it. Kirill's Telegram: @kirmark"
 prompts:

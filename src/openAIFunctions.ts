@@ -1,11 +1,13 @@
 import OpenAI from 'openai';
-import { MyContext, MyMessage, UserData } from './types';
+import { MyContext, MyMessage, MyMessageContent, UserData } from './types';
 import { AxiosResponse } from 'axios';
 import pTimeout from 'p-timeout';
 import { toLogFormat, encodeText, decodeTokens } from './utils';
 import { timeoutMsDefaultchatGPT, GPT_MODEL, maxTokensThresholdToReduceHistory, defaultPromptMessage } from './config';
 import { usedTokensForUser, insertUserOrUpdate, selectUserByUserId } from './database';
 import { maxTrialsTokens, OPENAI_API_KEY } from './config';
+
+export const APROX_IMG_TOKENS = 800;
 
 class NoOpenAiApiKeyError extends Error {
   constructor(message: string) {
@@ -88,12 +90,16 @@ async function createChatCompletionWithRetry(messages: MyMessage[], openai: Open
       const chatGPTAnswer = await pTimeout(
         openai.chat.completions.create({
           model: GPT_MODEL,
+          // @ts-ignore
           messages: messages,
           temperature: 0.7,
           // max_tokens: 1000,
         }),
         timeoutMs,
       );
+
+      // DEBUG: Uncomment to see the response in logs
+      // console.log(`chatGPTAnswer: ${JSON.stringify(chatGPTAnswer, null, 2)}`);
 
       // Assuming the API does not use a status property in the response to indicate success
       return chatGPTAnswer;
@@ -117,30 +123,108 @@ async function createChatCompletionWithRetry(messages: MyMessage[], openai: Open
 }
 
 export function reduceHistoryWithTokenLimit(
+  ctx: MyContext,
   messages: MyMessage[],
   maxTokens: number,
 ): MyMessage[] {
-  let totalTokenCount = 0;
+  let initialTokenCount = 0;
+  let resultTokenCount = 0;
+  
+  // Count the initial number of tokens
+  messages.forEach(message => {
+    if (Array.isArray(message.content)) {
+      message.content.forEach(part => {
+        if (part.type === 'text') {
+          const tokens = encodeText(part.text!);
+          initialTokenCount += tokens.length;
+        } else if (part.type === 'image_url') {
+          initialTokenCount += APROX_IMG_TOKENS;
+        }
+      });
+    } else {
+      const tokens = encodeText(message.content);
+      initialTokenCount += tokens.length;
+    }
+  });
 
   const messagesCleaned = messages.reduceRight<MyMessage[]>((acc, message) => {
-    const tokens = encodeText(message.content);
-    if (totalTokenCount + tokens.length <= maxTokens) {
-      acc.unshift(message); // Prepend to keep the original order
-      totalTokenCount += tokens.length;
-    } else {
-      const tokensAvailable = maxTokens - totalTokenCount;
-      if (tokensAvailable > 0) {
-        const partialTokens = tokens.slice(-tokensAvailable);
-        const partialContent = decodeTokens(partialTokens);
-        acc.unshift({ ...message, content: partialContent });
-        totalTokenCount += tokensAvailable;
+    let messageTokenCount = 0;
+    if (Array.isArray(message.content)) {
+      let newContent: MyMessageContent[] = [];
+
+      for (let i = message.content.length - 1; i >= 0; i--) {
+        const part = message.content[i];
+        if (part.type === 'text') {
+          const tokens = encodeText(part.text!);
+          messageTokenCount += tokens.length;
+
+          if (resultTokenCount + messageTokenCount <= maxTokens) {
+            newContent.unshift(part);
+            resultTokenCount += tokens.length;
+          } else {
+            const tokensAvailable = maxTokens - resultTokenCount;
+            if (tokensAvailable > 0) {
+              const partialTokens = tokens.slice(0, tokensAvailable);
+              const partialContent = decodeTokens(partialTokens);
+              newContent.unshift({ ...part, text: partialContent });
+              resultTokenCount += tokensAvailable;
+            }
+            break;
+          }
+        } else if (part.type === 'image_url') {
+          const imageTokenCount = APROX_IMG_TOKENS;
+          if (resultTokenCount + imageTokenCount <= maxTokens) {
+            newContent.unshift(part);
+            messageTokenCount += imageTokenCount;
+            resultTokenCount += imageTokenCount;
+          } else {
+            break; // Skip the entire image message part if it exceeds the limit
+          }
+        }
       }
-      return acc;
+
+      if (newContent.length > 0) {
+        acc.unshift({ ...message, content: newContent });
+      }
+    } else {
+      const tokens = encodeText(message.content);
+      if (resultTokenCount + tokens.length <= maxTokens) {
+        acc.unshift(message);
+        resultTokenCount += tokens.length;
+      } else {
+        const tokensAvailable = maxTokens - resultTokenCount;
+        if (tokensAvailable > 0) {
+          const partialTokens = tokens.slice(0, tokensAvailable);
+          const partialContent = decodeTokens(partialTokens);
+          acc.unshift({ ...message, content: partialContent });
+          resultTokenCount += tokensAvailable;
+          console.log(toLogFormat(ctx, `Partial tokens added (message.content): ${tokensAvailable}, resultTokenCount: ${resultTokenCount}`));
+        }
+        return acc;
+      }
     }
     return acc;
   }, []);
 
   return messagesCleaned;
+}
+
+export function calculateTotalTokens(messages: MyMessage[]): number {
+  return messages.reduce((total, message) => {
+    if (Array.isArray(message.content)) {
+      const messageTokens = message.content.reduce((msgTotal, part) => {
+        if (part.type === 'text') {
+          return msgTotal + encodeText(part.text!).length;
+        } else if (part.type === 'image_url') {
+          return msgTotal + APROX_IMG_TOKENS;
+        }
+        return msgTotal;
+      }, 0);
+      return total + messageTokens;
+    } else {
+      return total + encodeText(message.content).length;
+    }
+  }, 0);
 }
 
 export async function createChatCompletionWithRetryReduceHistoryLongtermMemory(
@@ -159,6 +243,7 @@ export async function createChatCompletionWithRetryReduceHistoryLongtermMemory(
       const maxContentLength: number = 8192 - userMessages.length; // to add '\n' between messages
       // Make the embedding request and return the result
       const userMessagesCleaned = reduceHistoryWithTokenLimit(
+        ctx,
         userMessages,
         maxContentLength,
       )
@@ -198,13 +283,14 @@ export async function createChatCompletionWithRetryReduceHistoryLongtermMemory(
     if (adjustedTokenThreshold <= 0) {
       throw new Error('Token threshold exceeded by default prompt and reference message.');
     }
-    console.log(toLogFormat(ctx, `adjustedTokenThreshold: ${adjustedTokenThreshold}`));
 
     // Reduce history using tokens
     const messagesCleaned = reduceHistoryWithTokenLimit(
+      ctx,
       messages,
       adjustedTokenThreshold,
     );
+    console.log(toLogFormat(ctx, `calculateTotalTokens(messagesCleaned): ${calculateTotalTokens(messagesCleaned)}`));
 
     // DEBUG: Uncomment to see hidden and user messages in logs
     // console.log(`messagesCleaned: ${JSON.stringify(messagesCleaned, null, 2)}`);
@@ -215,12 +301,15 @@ export async function createChatCompletionWithRetryReduceHistoryLongtermMemory(
     }
     finalMessages = finalMessages.concat(messagesCleaned);
 
-    // Calculate the total length of tokens for messagesCleaned
-    const messagesCleanedTokens = messagesCleaned.map((message) => encodeText(message.content));
-    const messagesCleanedTokensTotalLength = messagesCleanedTokens.reduce((sum, tokens) => sum + tokens.length, 0);
+    // Calculate total tokens
+    const messagesCleanedTokensTotalLength = calculateTotalTokens(messagesCleaned);
+    console.log(
+      toLogFormat(
+        ctx, 
+        `defaultPromptTokens: ${defaultPromptTokens.length}, referenceMessageTokens: ${referenceMessageTokens.length}, messagesCleanedTokens: ${messagesCleanedTokensTotalLength}, total: ${defaultPromptTokens.length + referenceMessageTokens.length + messagesCleanedTokensTotalLength} tokens out of ${maxTokensThresholdToReduceHistory}`
+      )
+    );
     
-    console.log(toLogFormat(ctx, `defaultPromptTokens: ${defaultPromptTokens.length}, referenceMessageTokens: ${referenceMessageTokens.length}, messagesCleanedTokens: ${messagesCleanedTokensTotalLength}, total: ${defaultPromptTokens.length + referenceMessageTokens.length + messagesCleanedTokensTotalLength} tokens.`));
-
     // DEBUG: Uncomment to see hidden and user messages in logs
     // console.log(`finalMessages: ${JSON.stringify(finalMessages, null, 2)}`);
 

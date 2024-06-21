@@ -9,11 +9,15 @@ import {
 } from './database';
 import {
   RESET_MESSAGE,
-  NO_PHOTO_ERROR,
   NO_VIDEO_ERROR,
   helpString,
 } from './config';
-import { processMessage, processVoiceMessage, processAudioFile } from './messageHandlers';
+import { 
+  processMessage, 
+  processVoiceMessage, 
+  processAudioFile, 
+  processPhotoMessage 
+} from './messageHandlers';
 import { toLogFormat, getMessageBufferKey } from './utils';
 import { pineconeIndex } from './vectorDatabase';
 
@@ -54,10 +58,9 @@ export function setupBotHandlers(bot: Telegraf<MyContext>) {
     saveCommandToDB(ctx, 'reset');
   });
 
-  bot.on(message('photo'), (ctx: MyContext) => {
+  bot.on(message('photo'), async (ctx: MyContext) => {
     console.log(toLogFormat(ctx, `photo received`));
-    ctx.reply(NO_PHOTO_ERROR);
-    insertEventSimple(ctx, 'user_message', 'user', 'photo');
+    await processPhotoMessage(ctx, pineconeIndex);
   });
 
   bot.on(message('video'), (ctx: MyContext) => {
