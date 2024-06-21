@@ -116,7 +116,8 @@ export function setupBotHandlers(bot: Telegraf<MyContext>) {
         await processAudioFile(ctx, fileId, mimeType, pineconeIndex);
       } else {
         console.log(toLogFormat(ctx, `File received: ${fileName} (${mimeType})`));
-        ctx.reply(`Received file: ${fileName} with MIME type: ${mimeType}`);
+        // ctx.reply(`Received file: ${fileName} with MIME type: ${mimeType}`);
+        ctx.reply('I can only process audio files and compresed photos for now.');
       }
     } else {
       console.error(toLogFormat(ctx, 'Received file, but file_id or mimeType is undefined'));
