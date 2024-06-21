@@ -10,9 +10,17 @@ export interface MyContext extends Context {
   session?: SessionData;
 }
 
+export interface MyMessageContent {
+  type?: "text" | "image_url";
+  text?: string;
+  image_url?: {
+    url: string;
+  };
+}
+
 export interface MyMessage {
   role: "user" | "assistant";
-  content: string;
+  content: string | MyMessageContent[];
   chat_id: number | null;
   user_id: number | null;
 }

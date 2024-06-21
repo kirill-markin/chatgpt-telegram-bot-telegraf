@@ -8,27 +8,28 @@ import {
   handleResponseSending,
   getUserDataOrReplyWithError,
   sendLongMessage,
+  processAndTruncateMessages,
 } from "./utils";
 import { 
   saveAnswerToDB, 
   insertModelTranscriptionEvent, 
   insertEventViaMessageType, 
-  selectMessagesByChatIdGPTformat, 
+  selectAndTransformMessagesByChatId, 
   insertMessage 
 } from "./database";
 import { 
   createChatCompletionWithRetryReduceHistoryLongtermMemory, 
   createTranscriptionWithRetry 
 } from './openAIFunctions';
-import { convertToMp3 } from './fileUtils';
+import { convertToMp3, encodeImageToBase64, resizeImage } from './fileUtils';
 
 async function processUserMessageAndRespond(
   ctx: MyContext, 
   messageContent: string, 
   userData: UserData, 
-  pineconeIndex: any // Replace 'any' with the actual type if you have one
+  pineconeIndex: any 
 ) {
-  // Save the transcription to the database
+  // Save the user message to the database
   if (ctx.chat && ctx.chat.id) {
     await insertMessage({
       role: "user",
@@ -40,13 +41,14 @@ async function processUserMessageAndRespond(
     throw new Error(`ctx.chat.id is undefined`);
   }
 
-  // Download all related messages from the database
-  let messages: MyMessage[] = await selectMessagesByChatIdGPTformat(ctx);
+  // Load all related messages from the database
+  let messages: MyMessage[] = await selectAndTransformMessagesByChatId(ctx);
 
   // DEBUG: messages to console in a pretty format JSON with newlines
-  // console.log(JSON.stringify(messages, null, 2));
+  // const truncatedMessages = processAndTruncateMessages(messages);
+  // console.log(JSON.stringify(truncatedMessages, null, 2));
 
-  // Send this text to OpenAI's Chat GPT model with retry logic
+  // Send these messages to OpenAI's Chat GPT model
   const chatResponse: any = await createChatCompletionWithRetryReduceHistoryLongtermMemory(
     ctx,
     messages,
@@ -55,15 +57,14 @@ async function processUserMessageAndRespond(
   );
   console.log(toLogFormat(ctx, `chatGPT response received`));
 
-  // Save the answer to the database
+  // Save the response tothe database
   saveAnswerToDB(chatResponse, ctx, userData);
 
-  // Handle response sending
+  // Send the response to the user
   await handleResponseSending(ctx, chatResponse);
 
   return chatResponse;
 }
-
 
 export async function processMessage(ctx: MyContext, messageContent: string, eventType: string, messageType: string, pineconeIndex: any) {
   console.log(toLogFormat(ctx, `new ${messageType} message received`));
@@ -191,6 +192,51 @@ export async function processAudioFile(ctx: MyContext, fileId: string, mimeType:
 
   } catch (e) {
     console.error(toLogFormat(ctx, `[ERROR] error occurred: ${e}`));
+    ctx.reply(errorString);
+  }
+}
+
+export async function processPhotoMessage(ctx: MyContext, pineconeIndex: any) {
+  const photo = ctx.message.photo[ctx.message.photo.length - 1]; // Get the highest resolution photo
+  const fileId = photo.file_id;
+
+  try {
+    const url = await ctx.telegram.getFileLink(fileId);
+    const response = await axios({ url: url.toString(), responseType: 'stream' });
+    if (!fs.existsSync('./temp')) {
+      fs.mkdirSync('./temp');
+    }
+    const inputFilePath = `./temp/${fileId}.jpg`;
+    const resizedFilePath = `./temp/${fileId}_resized.jpg`;
+    await new Promise((resolve, reject) => {
+      response.data.pipe(fs.createWriteStream(inputFilePath))
+        .on('error', reject)
+        .on('finish', resolve);
+    });
+
+    // Resize the image
+    await resizeImage(inputFilePath, resizedFilePath, 1024, 1024);
+    console.log(toLogFormat(ctx, `photo resized to 1024x1024 max as ${resizedFilePath}`));
+
+    // Encode the image to base64
+    const base64Image = await encodeImageToBase64(resizedFilePath);
+    const base64Content = `data:image/jpeg;base64,${base64Image}`;
+
+    // Delete the temporary files
+    fs.unlink(inputFilePath, (err) => {
+      if (err) console.error(err);
+    });
+    fs.unlink(resizedFilePath, (err) => {
+      if (err) console.error(err);
+    });
+
+    // Send the message to OpenAI
+    const userData = await getUserDataOrReplyWithError(ctx);
+    if (!userData) return;
+    await processMessage(ctx, base64Content, 'user_message', 'photo', pineconeIndex);
+
+  } catch (error) {
+    console.error(toLogFormat(ctx, `[ERROR] error occurred: ${error}`));
     ctx.reply(errorString);
   }
 }

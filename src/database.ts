@@ -1,5 +1,5 @@
-import { Pool, QueryResult } from 'pg';
-import { MyContext, MyMessage, User, Event, UserData } from './types';
+import { Pool } from 'pg';
+import { MyContext, MyMessage, MyMessageContent, User, Event, UserData } from './types';
 import { toLogFormat } from './utils';
 import { DATABASE_URL, NO_ANSWER_ERROR } from './config';
 
@@ -19,7 +19,7 @@ export const usedTokensForUser = async (user_id: number): Promise<number> => {
   return res.rows[0].sum || 0;
 };
 
-export const selectMessagesByChatIdGPTformat = async (ctx: MyContext) => {
+const selectMessagesByChatId = async (ctx: MyContext): Promise<MyMessage[]> => {
   if (ctx.chat && ctx.chat.id) {
     const res = await pool.query(`
       SELECT role, content 
@@ -34,6 +34,42 @@ export const selectMessagesByChatIdGPTformat = async (ctx: MyContext) => {
   } else {
     throw new Error('ctx.chat.id is undefined');
   }
+}
+
+const transformMessages = (messages: MyMessage[]): MyMessage[] => {
+  return messages.map(message => {
+    let newContent: MyMessageContent[] = [];
+
+    if (typeof message.content === 'string') {
+      if (message.content.startsWith('data:')) {
+        // Assuming it is an image URL
+        newContent.push({
+          type: 'image_url',
+          image_url: {
+            url: message.content
+          }
+        });
+      } else {
+        // Assuming it is text
+        newContent.push({
+          type: 'text',
+          text: message.content
+        });
+      }  
+    } else {
+      throw new Error('message.content is not a string after the query from the database');
+    }
+
+    return {
+      ...message,
+      content: newContent
+    };
+  });
+}
+
+export const selectAndTransformMessagesByChatId = async (ctx: MyContext): Promise<MyMessage[]> => {
+  const messages = await selectMessagesByChatId(ctx);
+  return transformMessages(messages);
 }
 
 export const selectUserByUserId = async (user_id: number) => {
@@ -181,7 +217,7 @@ export async function saveAnswerToDB(chatResponse: any, ctx: MyContext, userData
       usage_total_tokens: chatResponse.usage?.total_tokens || null,
       api_key: userData.openai.apiKey || null,
     } as Event);
-    console.log(toLogFormat(ctx, `answer saved to the database. total_tokens: ${chatResponse.usage?.total_tokens || null}`));
+    console.log(toLogFormat(ctx, `answer saved to the database. total_tokens for this answer: ${chatResponse.usage?.total_tokens || null}`));
   } catch (error) {
     console.log(toLogFormat(ctx, `[ERROR] error in saving the answer to the database: ${error}`));
   }
@@ -256,6 +292,7 @@ export async function insertEventViaMessageType(ctx: MyContext, eventType: strin
       chat_type: ctx.chat?.type || null,
       message_role: "user",
       messages_type: messageType,
+      // @ts-ignore
       message_voice_duration: messageType === "voice" ? ctx.message?.voice?.duration : null,
       message_command: null,
       content_length: messageContent.length,
