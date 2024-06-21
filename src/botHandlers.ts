@@ -13,7 +13,7 @@ import {
   NO_VIDEO_ERROR,
   helpString,
 } from './config';
-import { processMessage, processVoiceMessage } from './messageHandlers';
+import { processMessage, processVoiceMessage, processAudioFile } from './messageHandlers';
 import { toLogFormat, getMessageBufferKey } from './utils';
 import { pineconeIndex } from './vectorDatabase';
 
@@ -21,6 +21,7 @@ import { pineconeIndex } from './vectorDatabase';
 const messageBuffers = new Map();
 
 export function setupBotHandlers(bot: Telegraf<MyContext>) {
+
   bot.start(async (ctx: MyContext) => {
     console.log(toLogFormat(ctx, 'start command received'));
     if (ctx.from && ctx.from.id) {
@@ -90,7 +91,8 @@ export function setupBotHandlers(bot: Telegraf<MyContext>) {
 
     // Set a new timer
     messageData.timer = setTimeout(async () => {
-      const fullMessage = messageData.messages?.join('\n') || '';
+      // '<|endoftext|>' is a special token that marks the end of a text in OpenAI's and prohibited in the messages
+      const fullMessage = messageData.messages?.join('\n').replace('<|endoftext|>', '[__openai_token_endoftext__]') || '';
       console.log(toLogFormat(ctx, `full message collected. length: ${fullMessage.length}`));
       messageData.messages = []; // Clear the messages array
 
@@ -100,4 +102,33 @@ export function setupBotHandlers(bot: Telegraf<MyContext>) {
     // Save the message buffer
     messageBuffers.set(key, messageData);
   });
+
+  bot.on(message('document'), async (ctx: MyContext) => {
+    const fileId = ctx.message.document?.file_id;
+    const fileName = ctx.message.document?.file_name;
+    const mimeType = ctx.message.document?.mime_type;
+
+    if (fileId && mimeType) {
+      if (mimeType.startsWith('audio/')) {
+        await processAudioFile(ctx, fileId, mimeType, pineconeIndex);
+      } else {
+        console.log(toLogFormat(ctx, `File received: ${fileName} (${mimeType})`));
+        ctx.reply(`Received file: ${fileName} with MIME type: ${mimeType}`);
+      }
+    } else {
+      console.error(toLogFormat(ctx, 'Received file, but file_id or mimeType is undefined'));
+    }
+  });
+
+  bot.on(message('audio'), async (ctx: MyContext) => {
+    const fileId = ctx.message.audio?.file_id;
+    const mimeType = ctx.message.audio?.mime_type;
+
+    if (fileId && mimeType) {
+      await processAudioFile(ctx, fileId, mimeType, pineconeIndex);
+    } else {
+      console.error(toLogFormat(ctx, 'Received audio file, but file_id or mimeType is undefined'));
+    }
+  });
+
 }
