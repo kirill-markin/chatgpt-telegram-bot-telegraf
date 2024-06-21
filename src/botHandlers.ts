@@ -100,4 +100,30 @@ export function setupBotHandlers(bot: Telegraf<MyContext>) {
     // Save the message buffer
     messageBuffers.set(key, messageData);
   });
+
+  bot.on(message('document'), async (ctx: MyContext) => {
+    const fileId = ctx.message.document?.file_id;
+    const fileName = ctx.message.document?.file_name;
+    const mimeType = ctx.message.document?.mime_type;
+
+    if (fileId) {
+      console.log(toLogFormat(ctx, `File received: ${fileName} (${mimeType})`));
+      ctx.reply(`Received file: ${fileName} with MIME type: ${mimeType}`);
+    } else {
+      console.error(toLogFormat(ctx, 'Received file, but file_id is undefined'));
+    }
+  });
+
+  bot.on(message('audio'), async (ctx: MyContext) => {
+    const fileId = ctx.message.audio?.file_id;
+    const fileName = ctx.message.audio?.file_name;
+    const mimeType = ctx.message.audio?.mime_type;
+
+    if (fileId) {
+      console.log(toLogFormat(ctx, `Audio file received: ${fileName} (${mimeType})`));
+      ctx.reply(`Received audio file: ${fileName} with MIME type: ${mimeType}`);
+    } else {
+      console.error(toLogFormat(ctx, 'Received audio file, but file_id is undefined'));
+    }
+  });
 }
