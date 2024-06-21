@@ -91,7 +91,8 @@ export function setupBotHandlers(bot: Telegraf<MyContext>) {
 
     // Set a new timer
     messageData.timer = setTimeout(async () => {
-      const fullMessage = messageData.messages?.join('\n') || '';
+      // '<|endoftext|>' is a special token that marks the end of a text in OpenAI's and prohibited in the messages
+      const fullMessage = messageData.messages?.join('\n').replace('<|endoftext|>', '[__openai_token_endoftext__]') || '';
       console.log(toLogFormat(ctx, `full message collected. length: ${fullMessage.length}`));
       messageData.messages = []; // Clear the messages array
 
