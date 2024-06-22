@@ -14,7 +14,7 @@ import {
 } from './config';
 import { 
   handleMessage, 
-  processVoiceMessage, 
+  handleVoiceMessage, 
   processAudioFile, 
   processPhotoMessage 
 } from './messageHandlers';
@@ -78,7 +78,7 @@ export function setupBotHandlers(bot: Telegraf<MyContext>) {
 
   bot.on(message('voice'), async (ctx: MyContext) => {
     console.log(toLogFormat(ctx, `[NEW] voice received`));
-    processVoiceMessage(ctx, pineconeIndex);
+    handleVoiceMessage(ctx, pineconeIndex);
   });
 
   bot.on(message('text'), async (ctx: MyContext) => {

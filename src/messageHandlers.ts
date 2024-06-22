@@ -143,7 +143,7 @@ async function handleAudioFileCore(ctx: MyContext, fileId: string, mimeType: str
   return { transcriptionText, userData };
 }
   
-export async function processVoiceMessage(ctx: MyContext, pineconeIndex: any) {
+export async function handleVoiceMessage(ctx: MyContext, pineconeIndex: any) {
   try {
     // @ts-ignore
     const fileId = ctx.message?.voice?.file_id || null;
