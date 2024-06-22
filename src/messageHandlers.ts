@@ -22,7 +22,7 @@ import {
   insertMessage 
 } from "./database/database";
 import { 
-  createChatCompletionWithRetryReduceHistoryLongtermMemory, 
+  createCompletionWithRetriesAndMemory, 
   createTranscriptionWithRetry 
 } from './openAIFunctions';
 import { convertToMp3, encodeImageToBase64, resizeImage } from './utils/fileUtils';
@@ -53,7 +53,7 @@ async function processUserMessageAndRespond(
   // console.log(JSON.stringify(truncatedMessages, null, 2));
 
   // Send these messages to OpenAI's Chat GPT model
-  const chatResponse: any = await createChatCompletionWithRetryReduceHistoryLongtermMemory(
+  const chatResponse: any = await createCompletionWithRetriesAndMemory(
     ctx,
     messages,
     userData.openai,

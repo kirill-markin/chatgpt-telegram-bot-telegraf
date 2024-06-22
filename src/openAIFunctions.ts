@@ -229,7 +229,7 @@ export function countTotalTokens(messages: MyMessage[]): number {
   }, 0);
 }
 
-export async function createChatCompletionWithRetryReduceHistoryLongtermMemory(
+export async function createCompletionWithRetriesAndMemory(
   ctx: MyContext,
   messages: MyMessage[],
   openai: OpenAI,
