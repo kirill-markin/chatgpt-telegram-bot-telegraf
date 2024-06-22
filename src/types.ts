@@ -7,6 +7,7 @@ interface SessionData {
 }
 
 export interface MyContext extends Context {
+  botUsername?: string;
   session?: SessionData;
 }
 

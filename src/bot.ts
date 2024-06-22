@@ -4,13 +4,13 @@ import { TELEGRAM_BOT_TOKEN, timeoutMsDefaultchatGPT } from './config';
 import { initializeDatabase } from './databaseInit';
 import { setupBotHandlers } from './botHandlers';
 
-let bot: Telegraf | undefined;
+let bot: Telegraf<MyContext> | undefined;
 
 // Telegram bot
 bot = new Telegraf<MyContext>(TELEGRAM_BOT_TOKEN, { handlerTimeout: timeoutMsDefaultchatGPT * 6 });
 
 bot.telegram.getMe().then((botInfo) => {
-  bot!.options.username = botInfo.username;
+  bot!.context.botUsername = botInfo.username; // Store the bot username in context
 });
 
 const waitAndLog = async (stopSignal: any, func: any) => {
@@ -43,7 +43,7 @@ bot.use(async (ctx: MyContext, next) => {
     sendChatActionTyping = async () => {
       try {
         await ctx.telegram.sendChatAction(chatId, 'typing');
-      } catch (error) {
+      } catch (error: Error | any) {
         if (error.response && error.response.error_code === 403) {
           console.log(`User ${chatId} has blocked the bot.`);
         } else {
