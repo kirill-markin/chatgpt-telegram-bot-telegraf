@@ -293,8 +293,7 @@ export async function createChatCompletionWithRetryReduceHistoryLongtermMemory(
       messages,
       adjustedTokenThreshold,
     );
-    console.log(toLogFormat(ctx, `calculateTotalTokens(messagesCleaned): ${calculateTotalTokens(messagesCleaned)}`));
-
+    
     // DEBUG: Uncomment to see hidden and user messages in logs
     // console.log(`messagesCleaned: ${JSON.stringify(messagesCleaned, null, 2)}`);
 
