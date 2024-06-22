@@ -16,7 +16,7 @@ export async function sendSplitMessage(ctx: MyContext, message: string) {
 }
 
 // Function to handle the response sending logic
-export async function handleResponseSending(ctx: MyContext, chatResponse: any) {
+export async function sendResponse(ctx: MyContext, chatResponse: any) {
   try {
     let answer = chatResponse?.choices?.[0]?.message?.content ?? NO_ANSWER_ERROR;
     

@@ -11,7 +11,7 @@ import {
   truncateMessages,
 } from "./utils/messageUtils";
 import { 
-  handleResponseSending,
+  sendResponse,
   sendSplitMessage,
 } from "./utils/responseUtils";
 import { 
@@ -65,7 +65,7 @@ async function handleUserMessageAndReply(
   storeAnswer(chatResponse, ctx, userData);
 
   // Send the response to the user
-  await handleResponseSending(ctx, chatResponse);
+  await sendResponse(ctx, chatResponse);
 
   return chatResponse;
 }
