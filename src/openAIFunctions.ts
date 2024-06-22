@@ -124,7 +124,7 @@ async function createChatCompletionWithRetries(messages: MyMessage[], openai: Op
   }
 }
 
-export function reduceHistoryWithTokenLimit(
+export function truncateHistoryToTokenLimit(
   ctx: MyContext,
   messages: MyMessage[],
   maxTokens: number,
@@ -245,7 +245,7 @@ export async function createChatCompletionWithRetryReduceHistoryLongtermMemory(
       const userMessages = messages.filter((message) => message.role === "user");
       const maxContentLength: number = 8192 - userMessages.length; // to add '\n' between messages
       // Make the embedding request and return the result
-      const userMessagesCleaned = reduceHistoryWithTokenLimit(
+      const userMessagesCleaned = truncateHistoryToTokenLimit(
         ctx,
         userMessages,
         maxContentLength,
@@ -288,7 +288,7 @@ export async function createChatCompletionWithRetryReduceHistoryLongtermMemory(
     }
 
     // Reduce history using tokens
-    const messagesCleaned = reduceHistoryWithTokenLimit(
+    const messagesCleaned = truncateHistoryToTokenLimit(
       ctx,
       messages,
       adjustedTokenThreshold,

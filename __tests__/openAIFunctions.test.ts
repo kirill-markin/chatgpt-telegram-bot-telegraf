@@ -1,4 +1,4 @@
-import { reduceHistoryWithTokenLimit, calculateTotalTokens, APPROX_IMAGE_TOKENS } from '../src/openAIFunctions';
+import { truncateHistoryToTokenLimit, calculateTotalTokens, APPROX_IMAGE_TOKENS } from '../src/openAIFunctions';
 import { MyContext, MyMessage } from '../src/types';
 
 // Mock data
@@ -64,10 +64,10 @@ const mockCtx: Partial<MyContext> = {
   }
 };
 
-describe('reduceHistoryWithTokenLimit', () => {
+describe('truncateHistoryToTokenLimit', () => {
   it('should reduce history to fit within token limit', () => {
     const maxTokens = 0;
-    const reducedMessages = reduceHistoryWithTokenLimit(mockCtx as MyContext, mockMessages, maxTokens);
+    const reducedMessages = truncateHistoryToTokenLimit(mockCtx as MyContext, mockMessages, maxTokens);
 
     // Validate the length of the reduced messages
     const totalTokens = calculateTotalTokens(reducedMessages);
@@ -76,7 +76,7 @@ describe('reduceHistoryWithTokenLimit', () => {
 
   it('should return an empty array if maxTokens is 0', () => {
     const maxTokens = 0;
-    const reducedMessages = reduceHistoryWithTokenLimit(mockCtx as MyContext, mockMessages, maxTokens);
+    const reducedMessages = truncateHistoryToTokenLimit(mockCtx as MyContext, mockMessages, maxTokens);
 
     expect(reducedMessages).toEqual([]);
   });
