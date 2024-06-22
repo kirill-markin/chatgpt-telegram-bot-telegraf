@@ -1,4 +1,4 @@
-import { MyContext, MyMessage } from './types';
+import { MyContext, MyMessage } from '../types';
 import { truncateString } from './encodingUtils';
 
 export const getMessageBufferKey = (ctx: MyContext) => {

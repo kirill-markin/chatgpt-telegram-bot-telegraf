@@ -1,6 +1,6 @@
-import { MyContext } from './types';
+import { MyContext } from '../types';
 import { toLogFormat } from './utils';
-import { NO_ANSWER_ERROR } from './config';
+import { NO_ANSWER_ERROR } from '../config';
 
 const MAX_MESSAGE_LENGTH_TELEGRAM = 4096;
 

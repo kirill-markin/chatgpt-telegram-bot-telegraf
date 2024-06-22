@@ -2,10 +2,10 @@ import OpenAI from 'openai';
 import { MyContext, MyMessage, MyMessageContent, UserData } from './types';
 import { AxiosResponse } from 'axios';
 import pTimeout from 'p-timeout';
-import { toLogFormat } from './utils';
-import { encodeText, decodeTokens } from './encodingUtils';
+import { toLogFormat } from './utils/utils';
+import { encodeText, decodeTokens } from './utils/encodingUtils';
 import { timeoutMsDefaultchatGPT, GPT_MODEL, maxTokensThresholdToReduceHistory, defaultPromptMessage } from './config';
-import { usedTokensForUser, insertUserOrUpdate, selectUserByUserId } from './database';
+import { usedTokensForUser, insertUserOrUpdate, selectUserByUserId } from './database/database';
 import { maxTrialsTokens, OPENAI_API_KEY } from './config';
 
 export const APROX_IMG_TOKENS = 800;

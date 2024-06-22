@@ -1,11 +1,11 @@
-import { MyContext } from './types';
+import { MyContext } from '../types';
 import { 
   TRIAL_ENDED_ERROR,
- } from './config';
+ } from '../config';
 import { 
   ensureUserSettingsAndRetrieveOpenAi,
-} from './openAIFunctions';
-import { UserData } from './types';
+} from '../openAIFunctions';
+import { UserData } from '../types';
 
 class NoOpenAiApiKeyError extends Error {
   constructor(message: string) {

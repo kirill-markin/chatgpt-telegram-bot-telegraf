@@ -6,26 +6,26 @@ import { errorString } from './config';
 import { 
   toLogFormat, 
   getUserDataOrReplyWithError,
-} from "./utils";
+} from "./utils/utils";
 import {
   processAndTruncateMessages,
-} from "./messageUtils";
+} from "./utils/messageUtils";
 import { 
   handleResponseSending,
   sendLongMessage,
-} from "./responseUtils";
+} from "./utils/responseUtils";
 import { 
   saveAnswerToDB, 
   insertModelTranscriptionEvent, 
   insertEventViaMessageType, 
   selectAndTransformMessagesByChatId, 
   insertMessage 
-} from "./database";
+} from "./database/database";
 import { 
   createChatCompletionWithRetryReduceHistoryLongtermMemory, 
   createTranscriptionWithRetry 
 } from './openAIFunctions';
-import { convertToMp3, encodeImageToBase64, resizeImage } from './fileUtils';
+import { convertToMp3, encodeImageToBase64, resizeImage } from './utils/fileUtils';
 
 async function processUserMessageAndRespond(
   ctx: MyContext, 

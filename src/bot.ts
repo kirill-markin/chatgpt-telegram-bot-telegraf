@@ -1,7 +1,7 @@
 import { Telegraf } from "telegraf";
 import { MyContext } from './types';
 import { TELEGRAM_BOT_TOKEN, timeoutMsDefaultchatGPT } from './config';
-import { initializeDatabase } from './databaseInit';
+import { initializeDatabase } from './database/databaseInit';
 import { setupBotHandlers } from './botHandlers';
 
 let bot: Telegraf<MyContext> | undefined;

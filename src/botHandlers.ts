@@ -6,7 +6,7 @@ import {
   deactivateMessagesByChatId,
   insertEventSimple,
   saveCommandToDB,
-} from './database';
+} from './database/database';
 import {
   RESET_MESSAGE,
   NO_VIDEO_ERROR,
@@ -18,8 +18,8 @@ import {
   processAudioFile, 
   processPhotoMessage 
 } from './messageHandlers';
-import { toLogFormat } from './utils';
-import { getMessageBufferKey } from './messageUtils';
+import { toLogFormat } from './utils/utils';
+import { getMessageBufferKey } from './utils/messageUtils';
 import { pineconeIndex } from './vectorDatabase';
 
 // Create a map to store the message buffers

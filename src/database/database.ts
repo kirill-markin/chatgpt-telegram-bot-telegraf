@@ -1,7 +1,7 @@
 import { Pool } from 'pg';
-import { MyContext, MyMessage, MyMessageContent, User, Event, UserData } from './types';
-import { toLogFormat } from './utils';
-import { DATABASE_URL, NO_ANSWER_ERROR } from './config';
+import { MyContext, MyMessage, MyMessageContent, User, Event, UserData } from '../types';
+import { toLogFormat } from '../utils/utils';
+import { DATABASE_URL, NO_ANSWER_ERROR } from '../config';
 
 if (typeof DATABASE_URL !== 'string') {
   throw new Error('DATABASE_URL is not defined');
