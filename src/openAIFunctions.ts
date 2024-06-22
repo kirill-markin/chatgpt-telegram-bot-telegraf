@@ -5,7 +5,7 @@ import pTimeout from 'p-timeout';
 import { toLogFormat } from './utils/utils';
 import { encodeText, decodeTokens } from './utils/encodingUtils';
 import { CHAT_GPT_DEFAULT_TIMEOUT_MS, GPT_MODEL, MAX_TOKENS_THRESHOLD_TO_REDUCE_HISTORY, DEFAULT_PROMPT_MESSAGE } from './config';
-import { getUserUsedTokens, insertUserOrUpdate, getUserByUserId } from './database/database';
+import { getUserUsedTokens, addOrUpdateUser, getUserByUserId } from './database/database';
 import { MAX_TRIAL_TOKENS, OPENAI_API_KEY } from './config';
 
 export const APPROX_IMAGE_TOKENS = 800;
@@ -44,14 +44,14 @@ export async function getUserSettingsAndOpenAi(ctx: MyContext): Promise<UserData
         default_language_code: ctx.from?.language_code || null,
         language_code: ctx.from?.language_code || null,
       };
-      await insertUserOrUpdate(userSettings); // Insert the new user
+      await addOrUpdateUser(userSettings); // Insert the new user
       console.log(toLogFormat(ctx, "User created in the database"));
     } else {
       // If the user is found, update their data
       userSettings.username = ctx.from?.username || userSettings.username;
       userSettings.default_language_code = ctx.from?.language_code || userSettings.default_language_code;
       userSettings.language_code = ctx.from?.language_code || userSettings.language_code;
-      await insertUserOrUpdate(userSettings); // Update the user's data
+      await addOrUpdateUser(userSettings); // Update the user's data
       console.log(toLogFormat(ctx, "User data updated in the database"));
     }
 
@@ -65,12 +65,12 @@ export async function getUserSettingsAndOpenAi(ctx: MyContext): Promise<UserData
       const usedTokens = await getUserUsedTokens(user_id);
       if (usedTokens < MAX_TRIAL_TOKENS) {
         userSettings.usage_type = 'trial_active';
-        await insertUserOrUpdate(userSettings);
+        await addOrUpdateUser(userSettings);
         userSettings.openai_api_key = OPENAI_API_KEY;
         console.log(toLogFormat(ctx, `[ACCESS GRANTED] user is trial and user did not exceed the message limit. User used tokens: ${usedTokens} out of ${MAX_TRIAL_TOKENS}. openai_api_key set from environment variable.`));
       } else {
         userSettings.usage_type = 'trial_ended';
-        await insertUserOrUpdate(userSettings);
+        await addOrUpdateUser(userSettings);
         console.log(toLogFormat(ctx, `[ACCESS DENIED] user is not premium and has no custom openai_api_key and exceeded the message limit. User used tokens: ${usedTokens} out of ${MAX_TRIAL_TOKENS}.`));
         throw new NoOpenAiApiKeyError(`User with user_id ${user_id} has no openai_api_key`);
       }

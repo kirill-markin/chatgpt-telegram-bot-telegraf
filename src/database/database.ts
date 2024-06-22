@@ -86,7 +86,7 @@ export const addMessage = async ({role, content, chat_id, user_id}: MyMessage) =
   return res.rows[0];
 }
 
-export const insertUserOrUpdate = async ({user_id, username, default_language_code, language_code=default_language_code, openai_api_key=null, usage_type=null}: User) => {
+export const addOrUpdateUser = async ({user_id, username, default_language_code, language_code=default_language_code, openai_api_key=null, usage_type=null}: User) => {
   try {
     const res = await pool.query(`
     INSERT INTO users (user_id, username, default_language_code, language_code, openai_api_key, usage_type, created_at)
