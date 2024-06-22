@@ -15,7 +15,7 @@ import {
 import { 
   handleMessage, 
   handleVoiceMessage, 
-  processAudioFile, 
+  handleAudioFile, 
   processPhotoMessage 
 } from './messageHandlers';
 import { toLogFormat } from './utils/utils';
@@ -114,7 +114,7 @@ export function setupBotHandlers(bot: Telegraf<MyContext>) {
 
     if (fileId && mimeType) {
       if (mimeType.startsWith('audio/')) {
-        await processAudioFile(ctx, fileId, mimeType, pineconeIndex);
+        await handleAudioFile(ctx, fileId, mimeType, pineconeIndex);
       } else {
         console.log(toLogFormat(ctx, `File received: ${fileName} (${mimeType})`));
         // ctx.reply(`Received file: ${fileName} with MIME type: ${mimeType}`);
@@ -130,7 +130,7 @@ export function setupBotHandlers(bot: Telegraf<MyContext>) {
     const mimeType = ctx.message.audio?.mime_type;
 
     if (fileId && mimeType) {
-      await processAudioFile(ctx, fileId, mimeType, pineconeIndex);
+      await handleAudioFile(ctx, fileId, mimeType, pineconeIndex);
     } else {
       console.error(toLogFormat(ctx, 'Received audio file, but file_id or mimeType is undefined'));
     }

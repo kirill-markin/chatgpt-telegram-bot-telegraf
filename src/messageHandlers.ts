@@ -170,7 +170,7 @@ export async function handleVoiceMessage(ctx: MyContext, pineconeIndex: any) {
   }
 }
 
-export async function processAudioFile(ctx: MyContext, fileId: string, mimeType: string, pineconeIndex: any) {
+export async function handleAudioFile(ctx: MyContext, fileId: string, mimeType: string, pineconeIndex: any) {
   try {
     const result = await handleAudioFileCore(ctx, fileId, mimeType);
     if (!result) return;
