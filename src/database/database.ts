@@ -36,7 +36,7 @@ const getMessagesByChatId = async (ctx: MyContext): Promise<MyMessage[]> => {
   }
 }
 
-const transformMessages = (messages: MyMessage[]): MyMessage[] => {
+const convertMessages = (messages: MyMessage[]): MyMessage[] => {
   return messages.map(message => {
     let newContent: MyMessageContent[] = [];
 
@@ -69,7 +69,7 @@ const transformMessages = (messages: MyMessage[]): MyMessage[] => {
 
 export const selectAndTransformMessagesByChatId = async (ctx: MyContext): Promise<MyMessage[]> => {
   const messages = await getMessagesByChatId(ctx);
-  return transformMessages(messages);
+  return convertMessages(messages);
 }
 
 export const selectUserByUserId = async (user_id: number) => {
