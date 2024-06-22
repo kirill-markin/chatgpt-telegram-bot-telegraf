@@ -13,7 +13,7 @@ bot.telegram.getMe().then((botInfo) => {
   bot!.context.botUsername = botInfo.username; // Store the bot username in context
 });
 
-const waitAndLog = async (stopSignal: any, func: any) => {
+const waitForAndLog = async (stopSignal: any, func: any) => {
   while (!stopSignal()) {
     await new Promise(resolve => setTimeout(resolve, 2000));
     try {
@@ -53,13 +53,13 @@ bot.use(async (ctx: MyContext, next) => {
     };
   }
 
-  const waitPromise = waitAndLog(stopSignal, sendChatActionTyping);
+  const waitPromise = waitForAndLog(stopSignal, sendChatActionTyping);
 
   // Wait for next() to complete
   await next();
   isNextDone = true;
 
-  // Wait for waitAndLog to finish
+  // Wait for waitForAndLog to finish
   await waitPromise;
 
   const ms = new Date().getTime() - start.getTime();
