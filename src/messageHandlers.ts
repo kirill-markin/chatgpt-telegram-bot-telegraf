@@ -1,8 +1,7 @@
 import fs from "fs";
 import axios from "axios";
 import { MyContext, MyMessage } from "./types";
-import { UserData } from "./types";
-import { ERROR_MESSAGE } from './config';
+import { ERROR_MESSAGE, NO_VIDEO_ERROR } from './config';
 import { 
   formatLogMessage, 
   fetchUserDataOrReplyWithError,
@@ -17,67 +16,123 @@ import {
   addTranscriptionEvent, 
   addEventByMessageType, 
   getAndConvertMessagesByChatId, 
-  addMessage 
+  addMessage,
+  addSimpleEvent,
 } from "./database/database";
 import { 
   createCompletionWithRetriesAndMemory, 
   transcribeAudioWithRetries 
 } from './openAIFunctions';
 import { convertAudioToMp3, convertImageToBase64, resizeImageFile } from './utils/fileUtils';
+import { generateMessageBufferKey } from './utils/messageUtils';
+import { pineconeIndex } from './vectorDatabase';
 
-async function handleUserMessageAndReply(
-  ctx: MyContext, 
-  messageContent: string, 
-  userData: UserData, 
-  pineconeIndex: any 
-) {
-  // Save the user message to the database
-  if (ctx.chat && ctx.chat.id) {
-    await addMessage({
-      role: "user",
-      content: messageContent,
-      chat_id: ctx.chat.id,
-      user_id: ctx.from?.id || null,
-    });
+// Create a map to store the message buffers
+const messageBuffers = new Map();
+
+export async function handleAnyMessage(ctx: MyContext, messageType: string) {
+  console.log(formatLogMessage(ctx, `[NEW] ${messageType} received`));
+  const key = generateMessageBufferKey(ctx);
+  const messageData = messageBuffers.get(key) || { messages: [], timer: null };
+
+  if (messageType === 'voice') {
+    await handleVoiceMessage(ctx, pineconeIndex);
+  } else if (messageType === 'audio') {
+    // @ts-ignore
+    const fileId = ctx.message.audio?.file_id;
+    // @ts-ignore
+    const mimeType = ctx.message.audio?.mime_type;
+
+    if (fileId && mimeType) {
+      await saveMessageToDatabase(ctx, fileId, 'audio');
+      await handleAudioFile(ctx, fileId, mimeType, pineconeIndex);
+    } else {
+      console.error(formatLogMessage(ctx, 'Received audio file, but file_id or mimeType is undefined'));
+    }
+  } else if (messageType === 'photo') {
+    await handlePhotoMessage(ctx, pineconeIndex);
+  } else if (messageType === 'text') {
+    // @ts-ignore
+    await saveMessageToDatabase(ctx, ctx.message?.text, 'text');
+  } else if (messageType === 'document') {
+    // @ts-ignore
+    const fileId = ctx.message.document?.file_id;
+    // @ts-ignore
+    const fileName = ctx.message.document?.file_name;
+    // @ts-ignore
+    const mimeType = ctx.message.document?.mime_type;
+
+    if (fileId && mimeType) {
+      if (mimeType.startsWith('audio/')) {
+        await handleAudioFile(ctx, fileId, mimeType, pineconeIndex);
+      } else {
+        console.log(formatLogMessage(ctx, `File received: ${fileName} (${mimeType})`));
+        ctx.reply('I can only process audio files and compressed photos for now.');
+      }
+    } else {
+      console.error(formatLogMessage(ctx, 'Received file, but file_id or mimeType is undefined'));
+    }
+  } else if (messageType === 'video') {
+    console.log(formatLogMessage(ctx, `video received`));
+    ctx.reply(NO_VIDEO_ERROR);
+    addSimpleEvent(ctx, 'user_message', 'user', 'video');
+  } else if (messageType === 'sticker') {
+    console.log(formatLogMessage(ctx, `sticker received`));
+    ctx.reply('👍');
+    addSimpleEvent(ctx, 'user_message', 'user', 'sticker');
   } else {
-    throw new Error(`ctx.chat.id is undefined`);
+    throw new Error(`Unsupported message type: ${messageType}`);
   }
 
-  // Load all related messages from the database
-  let messages: MyMessage[] = await getAndConvertMessagesByChatId(ctx);
+  // Clear the old timer
+  if (messageData.timer) {
+    clearTimeout(messageData.timer);
+  }
 
-  // DEBUG: messages to console in a pretty format JSON with newlines
-  // console.log(`messages: ${JSON.stringify(truncateMessages(messages), null, 2)}`);
+  // Set a new timer
+  messageData.timer = setTimeout(async () => {
+    const messages = await getAndConvertMessagesByChatId(ctx);
+    const fullMessage = messages.map(msg => msg.content).join('\n');
+    console.log(formatLogMessage(ctx, `full message collected. length: ${fullMessage.length}`));
+    messageData.messages = []; // Clear the messages array
 
-  // Send these messages to OpenAI's Chat GPT model
-  const chatResponse: any = await createCompletionWithRetriesAndMemory(
-    ctx,
-    messages,
-    userData.openai,
-    pineconeIndex,
-  );
-  console.log(formatLogMessage(ctx, `chatGPT response received`));
+    await replyToUser(ctx, pineconeIndex);
+  }, 4000);
 
-  // Save the response tothe database
-  storeAnswer(chatResponse, ctx, userData);
-
-  // Send the response to the user
-  await sendResponse(ctx, chatResponse);
-
-  return chatResponse;
+  // Save the message buffer
+  messageBuffers.set(key, messageData);
 }
 
-export async function handleMessage(ctx: MyContext, messageContent: string, eventType: string, messageType: string, pineconeIndex: any) {
-  console.log(formatLogMessage(ctx, `new ${messageType} message received`));
-  
+export async function replyToUser(
+  ctx: MyContext,
+  pineconeIndex: any 
+) {
   try {
     const userData = await fetchUserDataOrReplyWithError(ctx);
-    if (!userData) return;
-    addEventByMessageType(ctx, eventType, messageType, messageContent);
-    console.log(formatLogMessage(ctx, `new ${messageType} message saved to the events table`));
+    if (!userData) return null;
 
-    await handleUserMessageAndReply(ctx, messageContent, userData, pineconeIndex);
+    // Load all related messages from the database
+    let messages: MyMessage[] = await getAndConvertMessagesByChatId(ctx);
 
+    // DEBUG: messages to console in a pretty format JSON with newlines
+    // console.log(`messages: ${JSON.stringify(truncateMessages(messages), null, 2)}`);
+
+    // Send these messages to OpenAI's Chat GPT model
+    const chatResponse: any = await createCompletionWithRetriesAndMemory(
+      ctx,
+      messages,
+      userData.openai,
+      pineconeIndex,
+    );
+    console.log(formatLogMessage(ctx, `chatGPT response received`));
+
+    // Save the response tothe database
+    storeAnswer(chatResponse, ctx, userData);
+
+    // Send the response to the user
+    await sendResponse(ctx, chatResponse);
+
+    return chatResponse;
   } catch (e) {
     console.error(formatLogMessage(ctx, `[ERROR] error occurred: ${e}`));
     ctx.reply(ERROR_MESSAGE);
@@ -158,8 +213,8 @@ export async function handleVoiceMessage(ctx: MyContext, pineconeIndex: any) {
     addTranscriptionEvent(ctx, transcriptionText, userData);
     console.log(formatLogMessage(ctx, `new voice transcription saved to the database`));
 
-    // Process the transcribed message
-    await handleMessage(ctx, transcriptionText, 'user_message', 'voice', pineconeIndex);
+    // Save the transcription text to the messages table
+    await saveMessageToDatabase(ctx, transcriptionText, 'text');
 
   } catch (e) {
     console.error(formatLogMessage(ctx, `[ERROR] error occurred: ${e}`));
@@ -238,13 +293,43 @@ export async function handlePhotoMessage(ctx: MyContext, pineconeIndex: any) {
       if (err) console.error(err);
     });
 
-    // Send the message to OpenAI
-    const userData = await fetchUserDataOrReplyWithError(ctx);
-    if (!userData) return;
-    await handleMessage(ctx, base64Content, 'user_message', 'photo', pineconeIndex);
+    // Save the photo to the database
+    await saveMessageToDatabase(ctx, base64Content, 'photo');
+
+    // Save caption text to the database if it exists
+    // @ts-ignore
+    if (ctx.message?.caption) {
+      // @ts-ignore
+      await saveMessageToDatabase(ctx, ctx.message.caption, 'text');
+    }
 
   } catch (error) {
     console.error(formatLogMessage(ctx, `[ERROR] error occurred: ${error}`));
     ctx.reply(ERROR_MESSAGE);
+  }
+}
+
+export async function saveMessageToDatabase(ctx: MyContext, messageContent: string, messageType: string) {
+  console.log(formatLogMessage(ctx, `new ${messageType} message received`));
+
+  // Get the user data
+  const userData = await fetchUserDataOrReplyWithError(ctx);
+  if (!userData) return;
+
+  // Save the message to the events table
+  addEventByMessageType(ctx, 'user_message', messageType, messageContent);
+  console.log(formatLogMessage(ctx, `new ${messageType} message saved to the events table`));
+
+  // Save the message to the messages table
+  if (ctx.chat && ctx.chat.id) {
+    await addMessage({
+      role: 'user',
+      content: messageContent,
+      chat_id: ctx.chat.id,
+      user_id: ctx.from?.id || null,
+    });
+    console.log(formatLogMessage(ctx, `${messageType} message saved to the messages table`));
+  } else {
+    throw new Error(`ctx.chat.id is undefined`);
   }
 }

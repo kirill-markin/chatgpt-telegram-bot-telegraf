@@ -20,48 +20,37 @@ const waitForAndLog = async (stopSignal: any, func: any) => {
     try {
       func();
     } catch (error) {
-        console.error(error);
+      console.error(error);
     }
   }
 };
 
 bot.use(async (ctx: MyContext, next) => {
   const start = new Date();
-
   let isNextDone = false;
   const stopSignal = () => isNextDone;
 
-  // Start waiting and logging in parallel
-  let sendChatActionTyping = async () => {};
   let chatId: number = -1;
   if (ctx.chat && ctx.chat.id) {
     chatId = ctx.chat.id;
   } else {
-    throw new Error(`ctx.chat.id is undefined`);
+    throw new Error("ctx.chat.id is undefined");
   }
 
   if (chatId !== -1) {
-    sendChatActionTyping = async () => {
-      try {
-        await ctx.telegram.sendChatAction(chatId, 'typing');
-      } catch (error: Error | any) {
-        if (error.response && error.response.error_code === 403) {
-          console.log(`User ${chatId} has blocked the bot.`);
-        } else {
-          console.error('Unexpected error:', error);
-        }
+    try {
+      await ctx.telegram.sendChatAction(chatId, 'typing');
+    } catch (error: Error | any) {
+      if (error.response && error.response.error_code === 403) {
+        console.log(`User ${chatId} has blocked the bot.`);
+      } else {
+        console.error('Unexpected error:', error);
       }
-    };
+    }
   }
 
-  const waitPromise = waitForAndLog(stopSignal, sendChatActionTyping);
-
-  // Wait for next() to complete
   await next();
   isNextDone = true;
-
-  // Wait for waitForAndLog to finish
-  await waitPromise;
 
   const ms = new Date().getTime() - start.getTime();
   console.log(`message processed. Response time: ${ms / 1000} seconds.`);
