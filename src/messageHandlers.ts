@@ -6,8 +6,10 @@ import { errorString } from './config';
 import { 
   toLogFormat, 
   getUserDataOrReplyWithError,
-  processAndTruncateMessages,
 } from "./utils";
+import {
+  processAndTruncateMessages,
+} from "./messageUtils";
 import { 
   handleResponseSending,
   sendLongMessage,
@@ -46,8 +48,8 @@ async function processUserMessageAndRespond(
   // Load all related messages from the database
   let messages: MyMessage[] = await selectAndTransformMessagesByChatId(ctx);
 
+  const truncatedMessages = processAndTruncateMessages(messages);
   // DEBUG: messages to console in a pretty format JSON with newlines
-  // const truncatedMessages = processAndTruncateMessages(messages);
   // console.log(JSON.stringify(truncatedMessages, null, 2));
 
   // Send these messages to OpenAI's Chat GPT model
@@ -122,6 +124,7 @@ async function processAudioCore(ctx: MyContext, fileId: string, mimeType: string
   }
 
   // Send the file to the OpenAI API for transcription
+  // @ts-ignore
   const transcription = await createTranscriptionWithRetry(fs.createReadStream(mp3FilePath), userData.openai);
   const transcriptionText = transcription.text;
   console.log(toLogFormat(ctx, "audio transcription received"));
@@ -138,6 +141,7 @@ async function processAudioCore(ctx: MyContext, fileId: string, mimeType: string
   
 export async function processVoiceMessage(ctx: MyContext, pineconeIndex: any) {
   try {
+    // @ts-ignore
     const fileId = ctx.message?.voice?.file_id || null;
     if (!fileId) {
       throw new Error("ctx.message.voice.file_id is undefined");
@@ -199,6 +203,7 @@ export async function processAudioFile(ctx: MyContext, fileId: string, mimeType:
 }
 
 export async function processPhotoMessage(ctx: MyContext, pineconeIndex: any) {
+  // @ts-ignore
   const photo = ctx.message.photo[ctx.message.photo.length - 1]; // Get the highest resolution photo
   const fileId = photo.file_id;
 

@@ -18,7 +18,8 @@ import {
   processAudioFile, 
   processPhotoMessage 
 } from './messageHandlers';
-import { toLogFormat, getMessageBufferKey } from './utils';
+import { toLogFormat } from './utils';
+import { getMessageBufferKey } from './messageUtils';
 import { pineconeIndex } from './vectorDatabase';
 
 // Create a map to store the message buffers
