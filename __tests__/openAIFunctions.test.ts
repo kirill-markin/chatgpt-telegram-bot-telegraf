@@ -1,4 +1,4 @@
-import { truncateHistoryToTokenLimit, calculateTotalTokens, APPROX_IMAGE_TOKENS } from '../src/openAIFunctions';
+import { truncateHistoryToTokenLimit, countTotalTokens, APPROX_IMAGE_TOKENS } from '../src/openAIFunctions';
 import { MyContext, MyMessage } from '../src/types';
 
 // Mock data
@@ -70,7 +70,7 @@ describe('truncateHistoryToTokenLimit', () => {
     const reducedMessages = truncateHistoryToTokenLimit(mockCtx as MyContext, mockMessages, maxTokens);
 
     // Validate the length of the reduced messages
-    const totalTokens = calculateTotalTokens(reducedMessages);
+    const totalTokens = countTotalTokens(reducedMessages);
     expect(totalTokens).toBeLessThanOrEqual(maxTokens);
   });
 
@@ -82,9 +82,9 @@ describe('truncateHistoryToTokenLimit', () => {
   });
 });
 
-describe('calculateTotalTokens', () => {
+describe('countTotalTokens', () => {
   it('should correctly calculate the total number of tokens', () => {
-    const totalTokens = calculateTotalTokens(mockMessages);
+    const totalTokens = countTotalTokens(mockMessages);
     
     // Assuming some hypothetical token counts for the messages
     const expectedTokens = 54 + APPROX_IMAGE_TOKENS; // Replace this with the actual expected token count
@@ -92,7 +92,7 @@ describe('calculateTotalTokens', () => {
   });
 
   it('should return 0 for an empty array', () => {
-    const totalTokens = calculateTotalTokens([]);
+    const totalTokens = countTotalTokens([]);
     expect(totalTokens).toEqual(0);
   });
 });

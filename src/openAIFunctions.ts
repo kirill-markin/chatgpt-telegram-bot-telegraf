@@ -211,7 +211,7 @@ export function truncateHistoryToTokenLimit(
   return messagesCleaned;
 }
 
-export function calculateTotalTokens(messages: MyMessage[]): number {
+export function countTotalTokens(messages: MyMessage[]): number {
   return messages.reduce((total, message) => {
     if (Array.isArray(message.content)) {
       const messageTokens = message.content.reduce((msgTotal, part) => {
@@ -304,7 +304,7 @@ export async function createChatCompletionWithRetryReduceHistoryLongtermMemory(
     finalMessages = finalMessages.concat(messagesCleaned);
 
     // Calculate total tokens
-    const messagesCleanedTokensTotalLength = calculateTotalTokens(messagesCleaned);
+    const messagesCleanedTokensTotalLength = countTotalTokens(messagesCleaned);
     console.log(
       toLogFormat(
         ctx, 
