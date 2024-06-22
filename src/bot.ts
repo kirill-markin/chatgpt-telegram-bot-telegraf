@@ -3,6 +3,7 @@ import { MyContext } from './types';
 import { TELEGRAM_BOT_TOKEN, CHAT_GPT_DEFAULT_TIMEOUT_MS } from './config';
 import { setupDatabase } from './database/databaseInit';
 import { initializeBotHandlers } from './botHandlers';
+import express from "express";
 
 let bot: Telegraf<MyContext> | undefined;
 
@@ -75,6 +76,18 @@ const startBot = async () => {
 
   bot!.launch();
   console.log('Bot started');
+
+  // Create an Express server for health check
+  const app = express();
+
+  app.get("/health", (req, res) => {
+    res.send("OK");
+  });
+
+  const PORT = process.env.PORT || 8080;
+  app.listen(PORT, () => {
+    console.log(`Health check server running on port ${PORT}`);
+  });
 };
 
 startBot().catch(err => {
