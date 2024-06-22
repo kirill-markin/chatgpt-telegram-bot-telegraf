@@ -77,7 +77,6 @@ export async function getUserSettingsAndOpenAi(ctx: MyContext): Promise<UserData
       }
     }
 
-    
     const openai = new OpenAI({
       apiKey: userSettings.openai_api_key,
     });
