@@ -1,5 +1,5 @@
 services:
-  - type: web
+  - type: worker
     name: chatgpt-telegram-bot
     env: docker
     plan: free
