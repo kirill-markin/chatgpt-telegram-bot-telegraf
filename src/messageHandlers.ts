@@ -206,7 +206,7 @@ export async function handleAudioFile(ctx: MyContext, fileId: string, mimeType: 
   }
 }
 
-export async function processPhotoMessage(ctx: MyContext, pineconeIndex: any) {
+export async function handlePhotoMessage(ctx: MyContext, pineconeIndex: any) {
   // @ts-ignore
   const photo = ctx.message.photo[ctx.message.photo.length - 1]; // Get the highest resolution photo
   const fileId = photo.file_id;

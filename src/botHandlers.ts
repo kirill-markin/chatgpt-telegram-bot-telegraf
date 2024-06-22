@@ -16,7 +16,7 @@ import {
   handleMessage, 
   handleVoiceMessage, 
   handleAudioFile, 
-  processPhotoMessage 
+  handlePhotoMessage 
 } from './messageHandlers';
 import { toLogFormat } from './utils/utils';
 import { getMessageBufferKey } from './utils/messageUtils';
@@ -61,7 +61,7 @@ export function setupBotHandlers(bot: Telegraf<MyContext>) {
 
   bot.on(message('photo'), async (ctx: MyContext) => {
     console.log(toLogFormat(ctx, `photo received`));
-    await processPhotoMessage(ctx, pineconeIndex);
+    await handlePhotoMessage(ctx, pineconeIndex);
   });
 
   bot.on(message('video'), (ctx: MyContext) => {
