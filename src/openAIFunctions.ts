@@ -86,7 +86,7 @@ export async function getUserSettingsAndOpenAi(ctx: MyContext): Promise<UserData
   }
 }
 
-async function createChatCompletionWithRetry(messages: MyMessage[], openai: OpenAI, retries = 5, timeoutMs = CHAT_GPT_DEFAULT_TIMEOUT_MS) {
+async function createChatCompletionWithRetries(messages: MyMessage[], openai: OpenAI, retries = 5, timeoutMs = CHAT_GPT_DEFAULT_TIMEOUT_MS) {
   for (let i = 0; i < retries; i++) {
     try {
       const chatGPTAnswer = await pTimeout(
@@ -315,7 +315,7 @@ export async function createChatCompletionWithRetryReduceHistoryLongtermMemory(
     // DEBUG: Uncomment to see hidden and user messages in logs
     // console.log(`finalMessages: ${JSON.stringify(finalMessages, null, 2)}`);
 
-    const chatGPTAnswer = await createChatCompletionWithRetry(
+    const chatGPTAnswer = await createChatCompletionWithRetries(
       finalMessages,
       openai,
       retries,
