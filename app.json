@@ -13,7 +13,8 @@
     },
     "SETTINGS_PATH": {
       "description": "Path to the settings file",
-      "value": "./settings/private_en.yaml"
+      "value": "./settings/private_en.yaml",
+      "hidden": true
     }
   },
   "addons": [
