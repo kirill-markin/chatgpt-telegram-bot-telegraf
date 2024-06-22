@@ -10,7 +10,7 @@ import {
 import {
   RESET_MESSAGE,
   NO_VIDEO_ERROR,
-  helpString,
+  HELP_MESSAGE,
 } from './config';
 import { 
   processMessage, 
@@ -40,11 +40,11 @@ export function setupBotHandlers(bot: Telegraf<MyContext>) {
     } else {
       throw new Error('ctx.from.id is undefined');
     }
-    ctx.reply(helpString);
+    ctx.reply(HELP_MESSAGE);
   });
 
   bot.help((ctx: MyContext) => {
-    ctx.reply(helpString);
+    ctx.reply(HELP_MESSAGE);
   });
 
   bot.command('reset', (ctx: MyContext) => {
