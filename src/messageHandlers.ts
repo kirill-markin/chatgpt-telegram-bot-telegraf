@@ -25,7 +25,7 @@ import {
   createCompletionWithRetriesAndMemory, 
   transcribeAudioWithRetries 
 } from './openAIFunctions';
-import { convertAudioToMp3, encodeImageToBase64, resizeImage } from './utils/fileUtils';
+import { convertAudioToMp3, convertImageToBase64, resizeImage } from './utils/fileUtils';
 
 async function handleUserMessageAndReply(
   ctx: MyContext, 
@@ -230,7 +230,7 @@ export async function handlePhotoMessage(ctx: MyContext, pineconeIndex: any) {
     console.log(formatLogMessage(ctx, `photo resized to 1024x1024 max as ${resizedFilePath}`));
 
     // Encode the image to base64
-    const base64Image = await encodeImageToBase64(resizedFilePath);
+    const base64Image = await convertImageToBase64(resizedFilePath);
     const base64Content = `data:image/jpeg;base64,${base64Image}`;
 
     // Delete the temporary files

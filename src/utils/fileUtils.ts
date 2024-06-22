@@ -19,7 +19,7 @@ export async function convertAudioToMp3(inputFilePath: string, outputFilePath: s
   });
 }
 
-export async function encodeImageToBase64(filePath: string): Promise<string> {
+export async function convertImageToBase64(filePath: string): Promise<string> {
   const fileBuffer = await fs.promises.readFile(filePath);
   return fileBuffer.toString('base64');
 }
