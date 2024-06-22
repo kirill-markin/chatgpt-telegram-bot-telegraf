@@ -4,7 +4,7 @@
   "repository": "https://github.com/kirill-markin/chatgpt-telegram-bot-telegraf",
   "env": {
     "TELEGRAM_BOT_TOKEN": {
-      "description": "Your Telegram bot token",
+      "description": "Your Telegram bot token obtained via https://t.me/BotFather",
       "required": true
     },
     "OPENAI_API_KEY": {
