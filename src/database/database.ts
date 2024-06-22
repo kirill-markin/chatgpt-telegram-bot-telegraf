@@ -223,7 +223,7 @@ export async function storeAnswer(chatResponse: any, ctx: MyContext, userData: U
   }
 }
 
-export async function saveCommandToDB(ctx: MyContext, command: string) {
+export async function storeCommand(ctx: MyContext, command: string) {
   try {
     addEvent({
       type: 'user_command',

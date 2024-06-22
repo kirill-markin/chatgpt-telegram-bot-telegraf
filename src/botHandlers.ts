@@ -5,7 +5,7 @@ import {
   addOrUpdateUser, 
   disableMessagesByChatId,
   insertEventSimple,
-  saveCommandToDB,
+  storeCommand,
 } from './database/database';
 import {
   RESET_MESSAGE,
@@ -56,7 +56,7 @@ export function initializeBotHandlers(bot: Telegraf<MyContext>) {
     }
     console.log(toLogFormat(ctx, `messages deleted from database`));
     ctx.reply(RESET_MESSAGE);
-    saveCommandToDB(ctx, 'reset');
+    storeCommand(ctx, 'reset');
   });
 
   bot.on(message('photo'), async (ctx: MyContext) => {
