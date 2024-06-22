@@ -23,7 +23,7 @@ import {
 } from "./database/database";
 import { 
   createCompletionWithRetriesAndMemory, 
-  createTranscriptionWithRetry 
+  transcribeAudioWithRetries 
 } from './openAIFunctions';
 import { convertToMp3, encodeImageToBase64, resizeImage } from './utils/fileUtils';
 
@@ -129,7 +129,7 @@ async function processAudioCore(ctx: MyContext, fileId: string, mimeType: string
 
   // Send the file to the OpenAI API for transcription
   // @ts-ignore
-  const transcription = await createTranscriptionWithRetry(fs.createReadStream(mp3FilePath), userData.openai);
+  const transcription = await transcribeAudioWithRetries(fs.createReadStream(mp3FilePath), userData.openai);
   const transcriptionText = transcription.text;
   console.log(toLogFormat(ctx, "audio transcription received"));
 

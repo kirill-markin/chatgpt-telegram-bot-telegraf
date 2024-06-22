@@ -327,13 +327,13 @@ export async function createCompletionWithRetriesAndMemory(
   }
 }
 
-export function createTranscriptionWithRetry(fileStream: File, openai: OpenAI, retries = 3): Promise<any> {
+export function transcribeAudioWithRetries(fileStream: File, openai: OpenAI, retries = 3): Promise<any> {
   return openai.audio.transcriptions.create({ model: "whisper-1", file: fileStream })
     .catch((error) => {
       if (retries === 0) {
         throw error;
       }
       console.error(`openai.createTranscription failed. Retries left: ${retries}`);
-      return createTranscriptionWithRetry(fileStream, openai, retries - 1);
+      return transcribeAudioWithRetries(fileStream, openai, retries - 1);
     });
 }
