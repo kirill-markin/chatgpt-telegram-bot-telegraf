@@ -17,7 +17,7 @@ import {
 import { 
   storeAnswer, 
   insertModelTranscriptionEvent, 
-  insertEventViaMessageType, 
+  addEventByMessageType, 
   getAndConvertMessagesByChatId, 
   addMessage 
 } from "./database/database";
@@ -76,7 +76,7 @@ export async function handleMessage(ctx: MyContext, messageContent: string, even
   try {
     const userData = await getUserDataOrReplyWithError(ctx);
     if (!userData) return;
-    insertEventViaMessageType(ctx, eventType, messageType, messageContent);
+    addEventByMessageType(ctx, eventType, messageType, messageContent);
     console.log(toLogFormat(ctx, `new ${messageType} message saved to the events table`));
 
     await handleUserMessageAndReply(ctx, messageContent, userData, pineconeIndex);

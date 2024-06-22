@@ -280,7 +280,7 @@ export async function addSimpleEvent(ctx: MyContext, type: string, message_role:
   }
 }
 
-export async function insertEventViaMessageType(ctx: MyContext, eventType: string, messageType: string, messageContent: string) {
+export async function addEventByMessageType(ctx: MyContext, eventType: string, messageType: string, messageContent: string) {
   try {
     addEvent({
       type: eventType,
