@@ -20,10 +20,11 @@ class NoOpenAiApiKeyError extends Error {
 // default prompt message to add to the GPT model
 
 let defaultPromptMessageObj = {} as MyMessage;
+const defaultPromptMessageString = defaultPromptMessage?.toString();
 if (defaultPromptMessage) {
   defaultPromptMessageObj = {
     "role": "assistant",
-    "content": defaultPromptMessage.toString(),
+    "content": defaultPromptMessageString,
   } as MyMessage;
 } else {
   console.log('Default prompt message not found');
@@ -239,6 +240,7 @@ export async function createChatCompletionWithRetryReduceHistoryLongtermMemory(
   try {
     // Add long-term memory to the messages based on pineconeIndex
     let referenceMessageObj: MyMessage | undefined = undefined;
+    let referenceTextString : string = "";
     if (pineconeIndex) {
       const userMessages = messages.filter((message) => message.role === "user");
       const maxContentLength: number = 8192 - userMessages.length; // to add '\n' between messages
@@ -264,21 +266,21 @@ export async function createChatCompletionWithRetryReduceHistoryLongtermMemory(
       };
       const queryResponse = await pineconeIndex.query(queryRequest);
 
-      const referenceText = 
+      referenceTextString =
         "Related to this conversation document parts:\n" + 
         queryResponse.matches.map((match: any) => match.metadata.text).join('\n');
 
       referenceMessageObj = {
         role: "assistant",
-        content: referenceText,
+        content: referenceTextString,
       } as MyMessage;
 
-      console.log(toLogFormat(ctx, `referenceMessage added to the messages with ${queryResponse.matches.length} matches and ${referenceText.length} characters.`));
+      console.log(toLogFormat(ctx, `referenceMessage added to the messages with ${queryResponse.matches.length} matches and ${referenceTextString.length} characters.`));
     }
 
     // Tokenize and account for default prompt and reference message
-    const defaultPromptTokens = defaultPromptMessageObj ? encodeText(defaultPromptMessageObj.content) : new Uint32Array();
-    const referenceMessageTokens = referenceMessageObj ? encodeText(referenceMessageObj.content) : new Uint32Array();
+    const defaultPromptTokens = defaultPromptMessageObj ? encodeText(defaultPromptMessageString) : new Uint32Array();
+    const referenceMessageTokens = referenceMessageObj ? encodeText(referenceTextString) : new Uint32Array();
 
     const adjustedTokenThreshold = maxTokensThresholdToReduceHistory - defaultPromptTokens.length - referenceMessageTokens.length;
     if (adjustedTokenThreshold <= 0) {
