@@ -12,7 +12,7 @@ import {
 } from "./utils/messageUtils";
 import { 
   handleResponseSending,
-  sendLongMessage,
+  sendSplitMessage,
 } from "./utils/responseUtils";
 import { 
   storeAnswer, 
@@ -198,7 +198,7 @@ export async function handleAudioFile(ctx: MyContext, fileId: string, mimeType: 
     }
 
     // Reply with the formatted transcription text
-    await sendLongMessage(ctx, formattedTranscriptionText);
+    await sendSplitMessage(ctx, formattedTranscriptionText);
 
   } catch (e) {
     console.error(formatLogMessage(ctx, `[ERROR] error occurred: ${e}`));
