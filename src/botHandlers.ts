@@ -2,7 +2,7 @@ import { Telegraf } from "telegraf";
 import { message } from "telegraf/filters";
 import { MyContext, User } from './types';
 import { 
-  addOrUpdateUser, 
+  upsertUserIfNotExists, 
   disableMessagesByChatId,
   addSimpleEvent,
   storeCommand,
@@ -30,7 +30,7 @@ export function initializeBotHandlers(bot: Telegraf<MyContext>) {
   bot.start(async (ctx: MyContext) => {
     console.log(formatLogMessage(ctx, 'start command received'));
     if (ctx.from && ctx.from.id) {
-      await addOrUpdateUser({
+      await upsertUserIfNotExists({
         user_id: ctx.from.id,
         username: ctx.from?.username || null,
         default_language_code: ctx.from.language_code,

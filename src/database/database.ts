@@ -86,7 +86,7 @@ export const addMessage = async ({role, content, chat_id, user_id}: MyMessage) =
   return res.rows[0];
 }
 
-export const addOrUpdateUser = async ({user_id, username, default_language_code, language_code=default_language_code, openai_api_key=null, usage_type=null}: User) => {
+export const upsertUserIfNotExists = async ({user_id, username, default_language_code, language_code=default_language_code, openai_api_key=null, usage_type=null}: User) => {
   try {
     const res = await pool.query(`
     INSERT INTO users (user_id, username, default_language_code, language_code, openai_api_key, usage_type, created_at)
@@ -101,6 +101,25 @@ export const addOrUpdateUser = async ({user_id, username, default_language_code,
     RETURNING *;
   `, [user_id, username, default_language_code, language_code, openai_api_key, usage_type]);
   return res.rows[0];
+  } catch (error) {
+    throw error;
+  }
+}
+
+export const updateUserForce = async ({user_id, username, default_language_code, language_code=default_language_code, openai_api_key=null, usage_type=null}: User) => {
+  try {
+    const res = await pool.query(`
+    UPDATE users SET
+      username = $2,
+      default_language_code = $3,
+      language_code = $4,
+      openai_api_key = $5,
+      usage_type = $6,
+      created_at = CURRENT_TIMESTAMP
+    WHERE user_id = $1
+    RETURNING *;
+  `, [user_id, username, default_language_code, language_code, openai_api_key, usage_type]);
+    return res.rows[0];
   } catch (error) {
     throw error;
   }
@@ -340,3 +359,13 @@ export async function addTranscriptionEvent(ctx: MyContext, transcriptionText: s
     console.log(formatLogMessage(ctx, `[ERROR] error in saving the model_transcription to the database: ${error}`));
   }
 }
+
+export const getAllPremiumUsers = async () => {
+  const res = await pool.query(`
+    SELECT user_id, username, created_at 
+    FROM users 
+    WHERE usage_type = $1 
+    ORDER BY created_at DESC NULLS LAST
+  `, ['premium']);
+  return res.rows;
+};
