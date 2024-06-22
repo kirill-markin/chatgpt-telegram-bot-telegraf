@@ -7,6 +7,7 @@
   "scripts": {
     "start": "ts-node --transpile-only src/bot.ts",
     "test": "jest",
+    "help": "ts-node src/cli.ts --help",
     "set-premium": "ts-node src/cli.ts set-premium",
     "remove-premium": "ts-node src/cli.ts remove-premium",
     "list-premium": "ts-node src/cli.ts list-premium"

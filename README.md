@@ -119,6 +119,14 @@ Ensure you have met the following requirements:
 
 ## User Management
 
+### Displaying Help Information
+
+To display help information about available commands, use the following command:
+
+```sh
+npm run help
+```
+
 ### Setting a User as PREMIUM
 
 You can set a user as PREMIUM via the command line.
