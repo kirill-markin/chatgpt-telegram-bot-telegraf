@@ -1,6 +1,6 @@
 import { encoding_for_model, TiktokenModel } from 'tiktoken';
 
-export function encodeText(text: string, model: TiktokenModel = 'gpt-3.5-turbo'): Uint32Array {
+export function tokenizeText(text: string, model: TiktokenModel = 'gpt-3.5-turbo'): Uint32Array {
   // Ensure text is a string
   if (typeof text !== 'string') {
     throw new TypeError('Expected text to be a string');

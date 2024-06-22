@@ -3,7 +3,7 @@ import { MyContext, MyMessage, MyMessageContent, UserData } from './types';
 import { AxiosResponse } from 'axios';
 import pTimeout from 'p-timeout';
 import { toLogFormat } from './utils/utils';
-import { encodeText, decodeTokens } from './utils/encodingUtils';
+import { tokenizeText, decodeTokens } from './utils/encodingUtils';
 import { CHAT_GPT_DEFAULT_TIMEOUT_MS, GPT_MODEL, MAX_TOKENS_THRESHOLD_TO_REDUCE_HISTORY, DEFAULT_PROMPT_MESSAGE } from './config';
 import { getUserUsedTokens, addOrUpdateUser, getUserByUserId } from './database/database';
 import { MAX_TRIAL_TOKENS, OPENAI_API_KEY } from './config';
@@ -137,14 +137,14 @@ export function truncateHistoryToTokenLimit(
     if (Array.isArray(message.content)) {
       message.content.forEach(part => {
         if (part.type === 'text') {
-          const tokens = encodeText(part.text!);
+          const tokens = tokenizeText(part.text!);
           initialTokenCount += tokens.length;
         } else if (part.type === 'image_url') {
           initialTokenCount += APPROX_IMAGE_TOKENS;
         }
       });
     } else {
-      const tokens = encodeText(message.content);
+      const tokens = tokenizeText(message.content);
       initialTokenCount += tokens.length;
     }
   });
@@ -157,7 +157,7 @@ export function truncateHistoryToTokenLimit(
       for (let i = message.content.length - 1; i >= 0; i--) {
         const part = message.content[i];
         if (part.type === 'text') {
-          const tokens = encodeText(part.text!);
+          const tokens = tokenizeText(part.text!);
           messageTokenCount += tokens.length;
 
           if (resultTokenCount + messageTokenCount <= maxTokens) {
@@ -189,7 +189,7 @@ export function truncateHistoryToTokenLimit(
         acc.unshift({ ...message, content: newContent });
       }
     } else {
-      const tokens = encodeText(message.content);
+      const tokens = tokenizeText(message.content);
       if (resultTokenCount + tokens.length <= maxTokens) {
         acc.unshift(message);
         resultTokenCount += tokens.length;
@@ -216,7 +216,7 @@ export function countTotalTokens(messages: MyMessage[]): number {
     if (Array.isArray(message.content)) {
       const messageTokens = message.content.reduce((msgTotal, part) => {
         if (part.type === 'text') {
-          return msgTotal + encodeText(part.text!).length;
+          return msgTotal + tokenizeText(part.text!).length;
         } else if (part.type === 'image_url') {
           return msgTotal + APPROX_IMAGE_TOKENS;
         }
@@ -224,7 +224,7 @@ export function countTotalTokens(messages: MyMessage[]): number {
       }, 0);
       return total + messageTokens;
     } else {
-      return total + encodeText(message.content).length;
+      return total + tokenizeText(message.content).length;
     }
   }, 0);
 }
@@ -279,8 +279,8 @@ export async function createCompletionWithRetriesAndMemory(
     }
 
     // Tokenize and account for default prompt and reference message
-    const defaultPromptTokens = defaultPromptMessageObj ? encodeText(defaultPromptMessageString) : new Uint32Array();
-    const referenceMessageTokens = referenceMessageObj ? encodeText(referenceTextString) : new Uint32Array();
+    const defaultPromptTokens = defaultPromptMessageObj ? tokenizeText(defaultPromptMessageString) : new Uint32Array();
+    const referenceMessageTokens = referenceMessageObj ? tokenizeText(referenceTextString) : new Uint32Array();
 
     const adjustedTokenThreshold = MAX_TOKENS_THRESHOLD_TO_REDUCE_HISTORY - defaultPromptTokens.length - referenceMessageTokens.length;
     if (adjustedTokenThreshold <= 0) {
