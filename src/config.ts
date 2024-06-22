@@ -41,4 +41,4 @@ export const errorString = bot_settings.strings.error_string;
 export const botSettings = bot_settings;
 export const CHAT_GPT_DEFAULT_TIMEOUT_MS = 6*60*1000;
 export const defaultPrompt: Prompt | undefined = botSettings.prompts.find((prompt: Prompt) => prompt.name === 'default');
-export const defaultPromptMessage = defaultPrompt ? defaultPrompt.text : '';
+export const DEFAULT_PROMPT_MESSAGE = defaultPrompt ? defaultPrompt.text : '';

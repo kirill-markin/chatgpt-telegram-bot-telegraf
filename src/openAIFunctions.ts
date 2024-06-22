@@ -4,7 +4,7 @@ import { AxiosResponse } from 'axios';
 import pTimeout from 'p-timeout';
 import { toLogFormat } from './utils/utils';
 import { encodeText, decodeTokens } from './utils/encodingUtils';
-import { CHAT_GPT_DEFAULT_TIMEOUT_MS, GPT_MODEL, MAX_TOKENS_THRESHOLD_TO_REDUCE_HISTORY, defaultPromptMessage } from './config';
+import { CHAT_GPT_DEFAULT_TIMEOUT_MS, GPT_MODEL, MAX_TOKENS_THRESHOLD_TO_REDUCE_HISTORY, DEFAULT_PROMPT_MESSAGE } from './config';
 import { usedTokensForUser, insertUserOrUpdate, selectUserByUserId } from './database/database';
 import { maxTrialsTokens, OPENAI_API_KEY } from './config';
 
@@ -20,8 +20,8 @@ class NoOpenAiApiKeyError extends Error {
 // default prompt message to add to the GPT model
 
 let defaultPromptMessageObj = {} as MyMessage;
-const defaultPromptMessageString = defaultPromptMessage?.toString();
-if (defaultPromptMessage) {
+const defaultPromptMessageString = DEFAULT_PROMPT_MESSAGE?.toString();
+if (DEFAULT_PROMPT_MESSAGE) {
   defaultPromptMessageObj = {
     "role": "assistant",
     "content": defaultPromptMessageString,
