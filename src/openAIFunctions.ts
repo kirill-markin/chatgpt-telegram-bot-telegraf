@@ -7,6 +7,7 @@ import { tokenizeText, convertTokensToText } from './utils/encodingUtils';
 import { CHAT_GPT_DEFAULT_TIMEOUT_MS, GPT_MODEL, MAX_TOKENS_THRESHOLD_TO_REDUCE_HISTORY, DEFAULT_PROMPT_MESSAGE } from './config';
 import { getUserUsedTokens, upsertUserIfNotExists, getUserByUserId } from './database/database';
 import { MAX_TRIAL_TOKENS, OPENAI_API_KEY } from './config';
+import { truncateMessages } from "./utils/messageUtils";
 
 export const APPROX_IMAGE_TOKENS = 800;
 
@@ -101,7 +102,7 @@ async function createChatCompletionWithRetries(messages: MyMessage[], openai: Op
       );
 
       // DEBUG: Uncomment to see the response in logs
-      // console.log(`chatGPTAnswer: ${JSON.stringify(chatGPTAnswer, null, 2)}`);
+      // console.log(`chatGPTAnswer: ${JSON.stringify(truncateMessages(chatGPTAnswer), null, 2)}`);
 
       // Assuming the API does not use a status property in the response to indicate success
       return chatGPTAnswer;
@@ -295,7 +296,7 @@ export async function createCompletionWithRetriesAndMemory(
     );
     
     // DEBUG: Uncomment to see hidden and user messages in logs
-    // console.log(`messagesCleaned: ${JSON.stringify(messagesCleaned, null, 2)}`);
+    // console.log(`messagesCleaned: ${JSON.stringify(truncateMessages(messagesCleaned), null, 2)}`);
 
     let finalMessages = [defaultPromptMessageObj].filter(Boolean); // Ensure we don't include undefined
     if (referenceMessageObj) {
@@ -313,7 +314,7 @@ export async function createCompletionWithRetriesAndMemory(
     );
     
     // DEBUG: Uncomment to see hidden and user messages in logs
-    // console.log(`finalMessages: ${JSON.stringify(finalMessages, null, 2)}`);
+    // console.log(`finalMessages: ${JSON.stringify(truncateMessages(finalMessages), null, 2)}`);
 
     const chatGPTAnswer = await createChatCompletionWithRetries(
       finalMessages,

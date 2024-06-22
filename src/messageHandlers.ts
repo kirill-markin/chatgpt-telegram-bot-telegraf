@@ -7,9 +7,7 @@ import {
   formatLogMessage, 
   fetchUserDataOrReplyWithError,
 } from "./utils/utils";
-import {
-  truncateMessages,
-} from "./utils/messageUtils";
+import { truncateMessages } from "./utils/messageUtils";
 import { 
   sendResponse,
   sendSplitMessage,
@@ -48,9 +46,8 @@ async function handleUserMessageAndReply(
   // Load all related messages from the database
   let messages: MyMessage[] = await getAndConvertMessagesByChatId(ctx);
 
-  const truncatedMessages = truncateMessages(messages);
   // DEBUG: messages to console in a pretty format JSON with newlines
-  // console.log(JSON.stringify(truncatedMessages, null, 2));
+  // console.log(`messages: ${JSON.stringify(truncateMessages(messages), null, 2)}`);
 
   // Send these messages to OpenAI's Chat GPT model
   const chatResponse: any = await createCompletionWithRetriesAndMemory(
