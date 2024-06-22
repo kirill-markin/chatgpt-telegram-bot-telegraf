@@ -4,7 +4,7 @@ import { AxiosResponse } from 'axios';
 import pTimeout from 'p-timeout';
 import { toLogFormat } from './utils/utils';
 import { encodeText, decodeTokens } from './utils/encodingUtils';
-import { CHAT_GPT_DEFAULT_TIMEOUT_MS, GPT_MODEL, maxTokensThresholdToReduceHistory, defaultPromptMessage } from './config';
+import { CHAT_GPT_DEFAULT_TIMEOUT_MS, GPT_MODEL, MAX_TOKENS_THRESHOLD_TO_REDUCE_HISTORY, defaultPromptMessage } from './config';
 import { usedTokensForUser, insertUserOrUpdate, selectUserByUserId } from './database/database';
 import { maxTrialsTokens, OPENAI_API_KEY } from './config';
 
@@ -282,7 +282,7 @@ export async function createChatCompletionWithRetryReduceHistoryLongtermMemory(
     const defaultPromptTokens = defaultPromptMessageObj ? encodeText(defaultPromptMessageString) : new Uint32Array();
     const referenceMessageTokens = referenceMessageObj ? encodeText(referenceTextString) : new Uint32Array();
 
-    const adjustedTokenThreshold = maxTokensThresholdToReduceHistory - defaultPromptTokens.length - referenceMessageTokens.length;
+    const adjustedTokenThreshold = MAX_TOKENS_THRESHOLD_TO_REDUCE_HISTORY - defaultPromptTokens.length - referenceMessageTokens.length;
     if (adjustedTokenThreshold <= 0) {
       throw new Error('Token threshold exceeded by default prompt and reference message.');
     }
@@ -308,7 +308,7 @@ export async function createChatCompletionWithRetryReduceHistoryLongtermMemory(
     console.log(
       toLogFormat(
         ctx, 
-        `defaultPromptTokens: ${defaultPromptTokens.length}, referenceMessageTokens: ${referenceMessageTokens.length}, messagesCleanedTokens: ${messagesCleanedTokensTotalLength}, total: ${defaultPromptTokens.length + referenceMessageTokens.length + messagesCleanedTokensTotalLength} tokens out of ${maxTokensThresholdToReduceHistory}`
+        `defaultPromptTokens: ${defaultPromptTokens.length}, referenceMessageTokens: ${referenceMessageTokens.length}, messagesCleanedTokens: ${messagesCleanedTokensTotalLength}, total: ${defaultPromptTokens.length + referenceMessageTokens.length + messagesCleanedTokensTotalLength} tokens out of ${MAX_TOKENS_THRESHOLD_TO_REDUCE_HISTORY}`
       )
     );
     
