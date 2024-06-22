@@ -4,7 +4,7 @@ import { MyContext, User } from './types';
 import { 
   addOrUpdateUser, 
   disableMessagesByChatId,
-  insertEventSimple,
+  addSimpleEvent,
   storeCommand,
 } from './database/database';
 import {
@@ -67,13 +67,13 @@ export function initializeBotHandlers(bot: Telegraf<MyContext>) {
   bot.on(message('video'), (ctx: MyContext) => {
     console.log(toLogFormat(ctx, `video received`));
     ctx.reply(NO_VIDEO_ERROR);
-    insertEventSimple(ctx, 'user_message', 'user', 'video');
+    addSimpleEvent(ctx, 'user_message', 'user', 'video');
   });
 
   bot.on(message('sticker'), (ctx: MyContext) => {
     console.log(toLogFormat(ctx, `sticker received`));
     ctx.reply('👍');
-    insertEventSimple(ctx, 'user_message', 'user', 'sticker');
+    addSimpleEvent(ctx, 'user_message', 'user', 'sticker');
   });
 
   bot.on(message('voice'), async (ctx: MyContext) => {

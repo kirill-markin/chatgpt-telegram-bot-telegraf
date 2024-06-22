@@ -252,7 +252,7 @@ export async function storeCommand(ctx: MyContext, command: string) {
 }
 
 // addEvent Simple with only type, message_role, messages_type and this is it
-export async function insertEventSimple(ctx: MyContext, type: string, message_role: string, messages_type: string) {
+export async function addSimpleEvent(ctx: MyContext, type: string, message_role: string, messages_type: string) {
   try {
     addEvent({
       type: type,
