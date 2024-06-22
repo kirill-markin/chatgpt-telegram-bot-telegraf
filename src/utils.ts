@@ -1,13 +1,12 @@
 import { MyContext, MyMessage } from './types';
-import { encoding_for_model, TiktokenModel } from 'tiktoken';
 import { 
-  NO_ANSWER_ERROR,
   TRIAL_ENDED_ERROR,
  } from './config';
 import { 
   ensureUserSettingsAndRetrieveOpenAi,
 } from './openAIFunctions';
 import { UserData } from './types';
+import { truncateString } from './encodingUtils';
 
 export const toLogFormat = (ctx: MyContext, logMessage: string) => {
   const chat_id = ctx.chat?.id;
@@ -21,24 +20,6 @@ export const getMessageBufferKey = (ctx: MyContext) => {
   } else {
     throw new Error('ctx.chat.id or ctx.from.id is undefined');
   }
-}
-
-export function encodeText(text: string, model: TiktokenModel = 'gpt-3.5-turbo'): Uint32Array {
-  // Ensure text is a string
-  if (typeof text !== 'string') {
-    throw new TypeError('Expected text to be a string');
-  }
-  const encoder = encoding_for_model(model);
-  const tokens = encoder.encode(text);
-  encoder.free(); // Free the encoder when done
-  return tokens;
-}
-
-export function decodeTokens(tokens: Uint32Array, model: TiktokenModel = 'gpt-3.5-turbo'): string {
-  const encoder = encoding_for_model(model);
-  const text = encoder.decode(tokens);
-  encoder.free(); // Free the encoder when done
-  return new TextDecoder().decode(text);
 }
 
 class NoOpenAiApiKeyError extends Error {
@@ -63,13 +44,6 @@ export async function getUserDataOrReplyWithError(ctx: MyContext): Promise<UserD
 }
 
 const THRESHOLD_TO_TRUNK_MESSGES_FOR_CONSOLE = 100; // Length threshold for strings
-
-function truncateString(str: string, threshold: number): string {
-  if (str.length <= threshold) return str;
-  const start = str.slice(0, threshold / 2);
-  const end = str.slice(-threshold / 2);
-  return `${start}... [truncated] ...${end}`;
-}
 
 export function processAndTruncateMessages(messages: MyMessage[], threshold: number = THRESHOLD_TO_TRUNK_MESSGES_FOR_CONSOLE): MyMessage[] {
   return messages.map((message) => {
