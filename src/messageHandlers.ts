@@ -1,6 +1,6 @@
 import fs from "fs";
 import axios from "axios";
-import { MyContext, MyMessage } from "./types";
+import { MyContext, MyMessage, UserData, NoOpenAiApiKeyError } from "./types";
 import { ERROR_MESSAGE, NO_VIDEO_ERROR } from './config';
 import { 
   formatLogMessage, 
@@ -27,89 +27,100 @@ import {
 import { convertAudioToMp3, convertImageToBase64, resizeImageFile } from './utils/fileUtils';
 import { generateMessageBufferKey } from './utils/messageUtils';
 import { pineconeIndex } from './vectorDatabase';
+import { TRIAL_ENDED_ERROR } from './config';
+
 
 // Create a map to store the message buffers
 const messageBuffers = new Map();
 
 export async function handleAnyMessage(ctx: MyContext, messageType: string) {
   console.log(formatLogMessage(ctx, `[NEW] ${messageType} received`));
-  const key = generateMessageBufferKey(ctx);
-  const messageData = messageBuffers.get(key) || { messages: [], timer: null };
 
-  if (messageType === 'voice') {
-    await handleVoiceMessage(ctx, pineconeIndex);
-  } else if (messageType === 'audio') {
-    // @ts-ignore
-    const fileId = ctx.message.audio?.file_id;
-    // @ts-ignore
-    const mimeType = ctx.message.audio?.mime_type;
+  try {
+    const userData : UserData = await fetchUserDataOrReplyWithError(ctx);
+    
+    const key = generateMessageBufferKey(ctx);
+    const messageData = messageBuffers.get(key) || { messages: [], timer: null };
 
-    if (fileId && mimeType) {
-      await saveMessageToDatabase(ctx, fileId, 'audio');
-      await handleAudioFile(ctx, fileId, mimeType, pineconeIndex);
-    } else {
-      console.error(formatLogMessage(ctx, 'Received audio file, but file_id or mimeType is undefined'));
-    }
-  } else if (messageType === 'photo') {
-    await handlePhotoMessage(ctx, pineconeIndex);
-  } else if (messageType === 'text') {
-    // @ts-ignore
-    await saveMessageToDatabase(ctx, ctx.message?.text, 'text');
-  } else if (messageType === 'document') {
-    // @ts-ignore
-    const fileId = ctx.message.document?.file_id;
-    // @ts-ignore
-    const fileName = ctx.message.document?.file_name;
-    // @ts-ignore
-    const mimeType = ctx.message.document?.mime_type;
+    if (messageType === 'voice') {
+      await handleVoiceMessage(ctx, userData);
+    } else if (messageType === 'audio') {
+      // @ts-ignore
+      const fileId = ctx.message.audio?.file_id;
+      // @ts-ignore
+      const mimeType = ctx.message.audio?.mime_type;
 
-    if (fileId && mimeType) {
-      if (mimeType.startsWith('audio/')) {
-        await handleAudioFile(ctx, fileId, mimeType, pineconeIndex);
+      if (fileId && mimeType) {
+        await saveMessageToDatabase(ctx, fileId, 'audio');
+        await handleAudioFile(ctx, userData, fileId, mimeType);
       } else {
-        console.log(formatLogMessage(ctx, `File received: ${fileName} (${mimeType})`));
-        ctx.reply('I can only process audio files and compressed photos for now.');
+        console.error(formatLogMessage(ctx, 'Received audio file, but file_id or mimeType is undefined'));
       }
+    } else if (messageType === 'photo') {
+      await handlePhotoMessage(ctx);
+    } else if (messageType === 'text') {
+      // @ts-ignore
+      await saveMessageToDatabase(ctx, ctx.message?.text, 'text');
+    } else if (messageType === 'document') {
+      // @ts-ignore
+      const fileId = ctx.message.document?.file_id;
+      // @ts-ignore
+      const fileName = ctx.message.document?.file_name;
+      // @ts-ignore
+      const mimeType = ctx.message.document?.mime_type;
+
+      if (fileId && mimeType) {
+        if (mimeType.startsWith('audio/')) {
+          await handleAudioFile(ctx, userData, fileId, mimeType);
+        } else {
+          console.log(formatLogMessage(ctx, `File received: ${fileName} (${mimeType})`));
+          ctx.reply('I can only process audio files and compressed photos for now.');
+        }
+      } else {
+        console.error(formatLogMessage(ctx, 'Received file, but file_id or mimeType is undefined'));
+      }
+    } else if (messageType === 'video') {
+      console.log(formatLogMessage(ctx, `video received`));
+      ctx.reply(NO_VIDEO_ERROR);
+      addSimpleEvent(ctx, 'user_message', 'user', 'video');
+    } else if (messageType === 'sticker') {
+      console.log(formatLogMessage(ctx, `sticker received`));
+      ctx.reply('👍');
+      addSimpleEvent(ctx, 'user_message', 'user', 'sticker');
     } else {
-      console.error(formatLogMessage(ctx, 'Received file, but file_id or mimeType is undefined'));
+      throw new Error(`Unsupported message type: ${messageType}`);
     }
-  } else if (messageType === 'video') {
-    console.log(formatLogMessage(ctx, `video received`));
-    ctx.reply(NO_VIDEO_ERROR);
-    addSimpleEvent(ctx, 'user_message', 'user', 'video');
-  } else if (messageType === 'sticker') {
-    console.log(formatLogMessage(ctx, `sticker received`));
-    ctx.reply('👍');
-    addSimpleEvent(ctx, 'user_message', 'user', 'sticker');
-  } else {
-    throw new Error(`Unsupported message type: ${messageType}`);
+
+    // Clear the old timer
+    if (messageData.timer) {
+      clearTimeout(messageData.timer);
+    }
+
+    // Set a new timer
+    messageData.timer = setTimeout(async () => {
+      const messages = await getAndConvertMessagesByChatId(ctx);
+      const fullMessage = messages.map(msg => msg.content).join('\n');
+      console.log(formatLogMessage(ctx, `full message collected. length: ${fullMessage.length}`));
+      messageData.messages = []; // Clear the messages array
+
+      await replyToUser(ctx, userData, pineconeIndex);
+    }, 4000);
+
+    // Save the message buffer
+    messageBuffers.set(key, messageData);
+  } catch (e) {
+    if (e instanceof NoOpenAiApiKeyError) {
+      await ctx.reply(TRIAL_ENDED_ERROR);
+      return;
+    } else {
+      throw e;
+    }
   }
-
-  // Clear the old timer
-  if (messageData.timer) {
-    clearTimeout(messageData.timer);
-  }
-
-  // Set a new timer
-  messageData.timer = setTimeout(async () => {
-    const messages = await getAndConvertMessagesByChatId(ctx);
-    const fullMessage = messages.map(msg => msg.content).join('\n');
-    console.log(formatLogMessage(ctx, `full message collected. length: ${fullMessage.length}`));
-    messageData.messages = []; // Clear the messages array
-
-    await replyToUser(ctx, pineconeIndex);
-  }, 4000);
-
-  // Save the message buffer
-  messageBuffers.set(key, messageData);
 }
 
-export async function replyToUser(ctx: MyContext, pineconeIndex: any) {
+export async function replyToUser(ctx: MyContext, userData: UserData, pineconeIndex: any) {
   const stopTyping = await sendTypingActionPeriodically(ctx, 5000); // Start the typing action
   try {
-    const userData = await fetchUserDataOrReplyWithError(ctx);
-    if (!userData) return null;
-
     let messages: MyMessage[] = await getAndConvertMessagesByChatId(ctx);
 
     // DEBUG: messages to console in a pretty format JSON with newlines
@@ -134,10 +145,7 @@ export async function replyToUser(ctx: MyContext, pineconeIndex: any) {
   }
 }
 
-async function handleAudioFileCore(ctx: MyContext, fileId: string, mimeType: string | null) {
-  const userData = await fetchUserDataOrReplyWithError(ctx);
-  if (!userData) return null;
-
+async function handleAudioFileCore(ctx: MyContext, userData: UserData, fileId: string, mimeType: string | null) {
   // Determine file extension
   const extension = mimeType ? mimeType.split('/')[1].replace('x-', '') : 'oga'; // Default to 'oga' if mimeType is null
   
@@ -187,22 +195,19 @@ async function handleAudioFileCore(ctx: MyContext, fileId: string, mimeType: str
   }
   console.log(formatLogMessage(ctx, "audio processing finished"));
 
-  return { transcriptionText, userData };
+  return transcriptionText;
 }
-  
-export async function handleVoiceMessage(ctx: MyContext, pineconeIndex: any) {
+
+export async function handleVoiceMessage(ctx: MyContext, userData: UserData) {
   try {
     // @ts-ignore
     const fileId = ctx.message?.voice?.file_id || null;
     if (!fileId) {
       throw new Error("ctx.message.voice.file_id is undefined");
     }
-
-    const result = await handleAudioFileCore(ctx, fileId, null);
+    const transcriptionText = await handleAudioFileCore(ctx, userData, fileId, null);
     // mimeType is null for voice messages
-    if (!result) return;
-
-    const { transcriptionText, userData } = result;
+    if (!transcriptionText) return;
 
     // Save the transcription event to the database
     addTranscriptionEvent(ctx, transcriptionText, userData);
@@ -217,12 +222,10 @@ export async function handleVoiceMessage(ctx: MyContext, pineconeIndex: any) {
   }
 }
 
-export async function handleAudioFile(ctx: MyContext, fileId: string, mimeType: string, pineconeIndex: any) {
+export async function handleAudioFile(ctx: MyContext, userData: any, fileId: string, mimeType: string) {
   try {
-    const result = await handleAudioFileCore(ctx, fileId, mimeType);
-    if (!result) return;
-
-    const { transcriptionText, userData } = result;
+    const transcriptionText = await handleAudioFileCore(ctx, userData, fileId, mimeType);
+    if (!transcriptionText) return;
 
     // Formatted transcription text
     const formattedTranscriptionText = `You sent an audio file. Transcription of this audio file:\n\n\`\`\`\n${transcriptionText}\n\`\`\`\n`;
@@ -253,7 +256,7 @@ export async function handleAudioFile(ctx: MyContext, fileId: string, mimeType: 
   }
 }
 
-export async function handlePhotoMessage(ctx: MyContext, pineconeIndex: any) {
+export async function handlePhotoMessage(ctx: MyContext) {
   // @ts-ignore
   const photo = ctx.message.photo[ctx.message.photo.length - 1]; // Get the highest resolution photo
   const fileId = photo.file_id;
@@ -306,10 +309,6 @@ export async function handlePhotoMessage(ctx: MyContext, pineconeIndex: any) {
 
 export async function saveMessageToDatabase(ctx: MyContext, messageContent: string, messageType: string) {
   console.log(formatLogMessage(ctx, `new ${messageType} message received`));
-
-  // Get the user data
-  const userData = await fetchUserDataOrReplyWithError(ctx);
-  if (!userData) return;
 
   // Save the message to the events table
   addEventByMessageType(ctx, 'user_message', messageType, messageContent);

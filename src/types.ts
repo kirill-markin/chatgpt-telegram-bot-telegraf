@@ -79,3 +79,9 @@ export interface UserData {
   settings: UserSettings;
   openai: OpenAI;
 }
+export class NoOpenAiApiKeyError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'NoOpenAiApiKeyError';
+  }
+}
