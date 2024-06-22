@@ -106,7 +106,7 @@ export const addOrUpdateUser = async ({user_id, username, default_language_code,
   }
 }
   
-export const insertEvent = async (event: Event) => {
+export const addEvent = async (event: Event) => {
   event.time = new Date();
   try {
     const res = await pool.query(`
@@ -197,7 +197,7 @@ export async function saveAnswerToDB(chatResponse: any, ctx: MyContext, userData
     } else {
       throw new Error(`ctx.chat.id is undefined`);
     }
-    insertEvent({
+    addEvent({
       type: 'assistant_message',
       user_id: ctx.from?.id || null,
       user_is_bot: ctx.from?.is_bot || null,
@@ -225,7 +225,7 @@ export async function saveAnswerToDB(chatResponse: any, ctx: MyContext, userData
 
 export async function saveCommandToDB(ctx: MyContext, command: string) {
   try {
-    insertEvent({
+    addEvent({
       type: 'user_command',
       user_id: ctx.from?.id || null,
       user_is_bot: ctx.from?.is_bot || null,
@@ -251,10 +251,10 @@ export async function saveCommandToDB(ctx: MyContext, command: string) {
   }
 }
 
-// insertEvent Simple with only type, message_role, messages_type and this is it
+// addEvent Simple with only type, message_role, messages_type and this is it
 export async function insertEventSimple(ctx: MyContext, type: string, message_role: string, messages_type: string) {
   try {
-    insertEvent({
+    addEvent({
       type: type,
       user_id: ctx.from?.id || null,
       user_is_bot: ctx.from?.is_bot || null,
@@ -282,7 +282,7 @@ export async function insertEventSimple(ctx: MyContext, type: string, message_ro
 
 export async function insertEventViaMessageType(ctx: MyContext, eventType: string, messageType: string, messageContent: string) {
   try {
-    insertEvent({
+    addEvent({
       type: eventType,
       user_id: ctx.from?.id || null,
       user_is_bot: ctx.from?.is_bot || null,
@@ -311,7 +311,7 @@ export async function insertEventViaMessageType(ctx: MyContext, eventType: strin
 
 export async function insertModelTranscriptionEvent(ctx: MyContext, transcriptionText: string, userData: UserData) {
   try {
-    insertEvent({
+    addEvent({
       type: 'model_transcription',
 
       user_id: ctx.from?.id || null,
