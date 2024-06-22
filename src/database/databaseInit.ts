@@ -51,7 +51,23 @@ const createTableQueries = [
     usage_total_tokens INT,
     api_key VARCHAR(255)
   );
+  `,
   `
+  CREATE OR REPLACE FUNCTION delete_old_messages() RETURNS trigger AS $$
+  BEGIN
+    DELETE FROM messages WHERE time < NOW() - INTERVAL '7 days';
+    RETURN NEW;
+  END;
+  $$ LANGUAGE plpgsql;
+  `,
+  `
+  DROP TRIGGER IF EXISTS trigger_delete_old_messages ON messages;
+  `,
+  `
+  CREATE TRIGGER trigger_delete_old_messages
+  AFTER INSERT OR UPDATE ON messages
+  EXECUTE FUNCTION delete_old_messages();
+  `,
 ];
 
 function isError(err: unknown): err is Error {
