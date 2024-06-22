@@ -6,7 +6,7 @@ import { toLogFormat } from './utils/utils';
 import { encodeText, decodeTokens } from './utils/encodingUtils';
 import { CHAT_GPT_DEFAULT_TIMEOUT_MS, GPT_MODEL, MAX_TOKENS_THRESHOLD_TO_REDUCE_HISTORY, DEFAULT_PROMPT_MESSAGE } from './config';
 import { usedTokensForUser, insertUserOrUpdate, selectUserByUserId } from './database/database';
-import { maxTrialsTokens, OPENAI_API_KEY } from './config';
+import { MAX_TRIAL_TOKENS, OPENAI_API_KEY } from './config';
 
 export const APPROX_IMAGE_TOKENS = 800;
 
@@ -63,15 +63,15 @@ export async function ensureUserSettingsAndRetrieveOpenAi(ctx: MyContext): Promi
       console.log(toLogFormat(ctx, `[ACCESS GRANTED] user is premium but has no custom openai_api_key. openai_api_key set from environment variable.`));
     } else { // no access or trial
       const usedTokens = await usedTokensForUser(user_id);
-      if (usedTokens < maxTrialsTokens) {
+      if (usedTokens < MAX_TRIAL_TOKENS) {
         userSettings.usage_type = 'trial_active';
         await insertUserOrUpdate(userSettings);
         userSettings.openai_api_key = OPENAI_API_KEY;
-        console.log(toLogFormat(ctx, `[ACCESS GRANTED] user is trial and user did not exceed the message limit. User used tokens: ${usedTokens} out of ${maxTrialsTokens}. openai_api_key set from environment variable.`));
+        console.log(toLogFormat(ctx, `[ACCESS GRANTED] user is trial and user did not exceed the message limit. User used tokens: ${usedTokens} out of ${MAX_TRIAL_TOKENS}. openai_api_key set from environment variable.`));
       } else {
         userSettings.usage_type = 'trial_ended';
         await insertUserOrUpdate(userSettings);
-        console.log(toLogFormat(ctx, `[ACCESS DENIED] user is not premium and has no custom openai_api_key and exceeded the message limit. User used tokens: ${usedTokens} out of ${maxTrialsTokens}.`));
+        console.log(toLogFormat(ctx, `[ACCESS DENIED] user is not premium and has no custom openai_api_key and exceeded the message limit. User used tokens: ${usedTokens} out of ${MAX_TRIAL_TOKENS}.`));
         throw new NoOpenAiApiKeyError(`User with user_id ${user_id} has no openai_api_key`);
       }
     }
