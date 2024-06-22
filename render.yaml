@@ -14,7 +14,6 @@ services:
           name: chatgpt_bot_db
           property: connectionString
     healthCheckPath: /health
-    port: 8080
 
 databases:
   - name: chatgpt_bot_db
