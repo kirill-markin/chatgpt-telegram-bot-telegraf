@@ -5,7 +5,7 @@ import pTimeout from 'p-timeout';
 import { toLogFormat } from './utils/utils';
 import { encodeText, decodeTokens } from './utils/encodingUtils';
 import { CHAT_GPT_DEFAULT_TIMEOUT_MS, GPT_MODEL, MAX_TOKENS_THRESHOLD_TO_REDUCE_HISTORY, DEFAULT_PROMPT_MESSAGE } from './config';
-import { usedTokensForUser, insertUserOrUpdate, selectUserByUserId } from './database/database';
+import { getUserUsedTokens, insertUserOrUpdate, selectUserByUserId } from './database/database';
 import { MAX_TRIAL_TOKENS, OPENAI_API_KEY } from './config';
 
 export const APPROX_IMAGE_TOKENS = 800;
@@ -62,7 +62,7 @@ export async function getUserSettingsAndOpenAi(ctx: MyContext): Promise<UserData
       userSettings.openai_api_key = OPENAI_API_KEY;
       console.log(toLogFormat(ctx, `[ACCESS GRANTED] user is premium but has no custom openai_api_key. openai_api_key set from environment variable.`));
     } else { // no access or trial
-      const usedTokens = await usedTokensForUser(user_id);
+      const usedTokens = await getUserUsedTokens(user_id);
       if (usedTokens < MAX_TRIAL_TOKENS) {
         userSettings.usage_type = 'trial_active';
         await insertUserOrUpdate(userSettings);

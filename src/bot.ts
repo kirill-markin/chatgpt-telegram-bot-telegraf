@@ -1,7 +1,7 @@
 import { Telegraf } from "telegraf";
 import { MyContext } from './types';
 import { TELEGRAM_BOT_TOKEN, CHAT_GPT_DEFAULT_TIMEOUT_MS } from './config';
-import { initializeDatabase } from './database/databaseInit';
+import { setupDatabase } from './database/databaseInit';
 import { initializeBotHandlers } from './botHandlers';
 
 let bot: Telegraf<MyContext> | undefined;
@@ -70,7 +70,7 @@ bot.use(async (ctx: MyContext, next) => {
 initializeBotHandlers(bot);
 
 const startBot = async () => {
-  await initializeDatabase();
+  await setupDatabase();
   console.log('Database initialization complete. Starting bot...');
 
   bot!.launch();

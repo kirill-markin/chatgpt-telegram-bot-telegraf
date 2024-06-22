@@ -58,7 +58,7 @@ function isError(err: unknown): err is Error {
   return err instanceof Error;
 }
 
-export const initializeDatabase = async () => {
+export const setupDatabase = async () => {
   try {
     for (const createTableQuery of createTableQueries) {
       await pool.query(createTableQuery);
