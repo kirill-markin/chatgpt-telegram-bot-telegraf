@@ -3,7 +3,7 @@ import {
   TRIAL_ENDED_ERROR,
  } from '../config';
 import { 
-  ensureUserSettingsAndRetrieveOpenAi,
+  getUserSettingsAndOpenAi,
 } from '../openAIFunctions';
 import { UserData } from '../types';
 
@@ -22,7 +22,7 @@ export const toLogFormat = (ctx: MyContext, logMessage: string) => {
 
 export async function getUserDataOrReplyWithError(ctx: MyContext): Promise<UserData | null> {
   try {
-    const userData = await ensureUserSettingsAndRetrieveOpenAi(ctx);
+    const userData = await getUserSettingsAndOpenAi(ctx);
     return userData;
   } catch (e) {
     if (e instanceof NoOpenAiApiKeyError) {

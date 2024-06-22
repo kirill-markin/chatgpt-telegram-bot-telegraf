@@ -32,7 +32,7 @@ if (DEFAULT_PROMPT_MESSAGE) {
 
 // OpenAI functions
 
-export async function ensureUserSettingsAndRetrieveOpenAi(ctx: MyContext): Promise<UserData> {
+export async function getUserSettingsAndOpenAi(ctx: MyContext): Promise<UserData> {
   if (ctx.from && ctx.from.id) {
     const user_id = ctx.from.id;
     let userSettings = await selectUserByUserId(user_id);
