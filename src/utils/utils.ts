@@ -20,7 +20,7 @@ export const formatLogMessage = (ctx: MyContext, logMessage: string) => {
   return `Chat: ${chat_id}, User: ${username}: ${logMessage}`;
 }
 
-export async function getUserDataOrReplyWithError(ctx: MyContext): Promise<UserData | null> {
+export async function fetchUserDataOrReplyWithError(ctx: MyContext): Promise<UserData | null> {
   try {
     const userData = await getUserSettingsAndOpenAi(ctx);
     return userData;

@@ -5,7 +5,7 @@ import { UserData } from "./types";
 import { ERROR_MESSAGE } from './config';
 import { 
   formatLogMessage, 
-  getUserDataOrReplyWithError,
+  fetchUserDataOrReplyWithError,
 } from "./utils/utils";
 import {
   processAndTruncateMessages,
@@ -74,7 +74,7 @@ export async function handleMessage(ctx: MyContext, messageContent: string, even
   console.log(formatLogMessage(ctx, `new ${messageType} message received`));
   
   try {
-    const userData = await getUserDataOrReplyWithError(ctx);
+    const userData = await fetchUserDataOrReplyWithError(ctx);
     if (!userData) return;
     addEventByMessageType(ctx, eventType, messageType, messageContent);
     console.log(formatLogMessage(ctx, `new ${messageType} message saved to the events table`));
@@ -88,7 +88,7 @@ export async function handleMessage(ctx: MyContext, messageContent: string, even
 }
 
 async function handleAudioFileCore(ctx: MyContext, fileId: string, mimeType: string | null) {
-  const userData = await getUserDataOrReplyWithError(ctx);
+  const userData = await fetchUserDataOrReplyWithError(ctx);
   if (!userData) return null;
 
   // Determine file extension
@@ -242,7 +242,7 @@ export async function handlePhotoMessage(ctx: MyContext, pineconeIndex: any) {
     });
 
     // Send the message to OpenAI
-    const userData = await getUserDataOrReplyWithError(ctx);
+    const userData = await fetchUserDataOrReplyWithError(ctx);
     if (!userData) return;
     await handleMessage(ctx, base64Content, 'user_message', 'photo', pineconeIndex);
 
