@@ -39,6 +39,6 @@ export const maxTrialsTokens = bot_settings.max_trials_tokens || 200_000;
 export const helpString = bot_settings.strings.help_string;
 export const errorString = bot_settings.strings.error_string;
 export const botSettings = bot_settings;
-export const timeoutMsDefaultchatGPT = 6*60*1000;
+export const CHAT_GPT_DEFAULT_TIMEOUT_MS = 6*60*1000;
 export const defaultPrompt: Prompt | undefined = botSettings.prompts.find((prompt: Prompt) => prompt.name === 'default');
 export const defaultPromptMessage = defaultPrompt ? defaultPrompt.text : '';

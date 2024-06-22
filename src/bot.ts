@@ -1,13 +1,13 @@
 import { Telegraf } from "telegraf";
 import { MyContext } from './types';
-import { TELEGRAM_BOT_TOKEN, timeoutMsDefaultchatGPT } from './config';
+import { TELEGRAM_BOT_TOKEN, CHAT_GPT_DEFAULT_TIMEOUT_MS } from './config';
 import { initializeDatabase } from './database/databaseInit';
 import { setupBotHandlers } from './botHandlers';
 
 let bot: Telegraf<MyContext> | undefined;
 
 // Telegram bot
-bot = new Telegraf<MyContext>(TELEGRAM_BOT_TOKEN, { handlerTimeout: timeoutMsDefaultchatGPT * 6 });
+bot = new Telegraf<MyContext>(TELEGRAM_BOT_TOKEN, { handlerTimeout: CHAT_GPT_DEFAULT_TIMEOUT_MS * 6 });
 
 bot.telegram.getMe().then((botInfo) => {
   bot!.context.botUsername = botInfo.username; // Store the bot username in context

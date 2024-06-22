@@ -4,7 +4,7 @@ import { AxiosResponse } from 'axios';
 import pTimeout from 'p-timeout';
 import { toLogFormat } from './utils/utils';
 import { encodeText, decodeTokens } from './utils/encodingUtils';
-import { timeoutMsDefaultchatGPT, GPT_MODEL, maxTokensThresholdToReduceHistory, defaultPromptMessage } from './config';
+import { CHAT_GPT_DEFAULT_TIMEOUT_MS, GPT_MODEL, maxTokensThresholdToReduceHistory, defaultPromptMessage } from './config';
 import { usedTokensForUser, insertUserOrUpdate, selectUserByUserId } from './database/database';
 import { maxTrialsTokens, OPENAI_API_KEY } from './config';
 
@@ -86,7 +86,7 @@ export async function ensureUserSettingsAndRetrieveOpenAi(ctx: MyContext): Promi
   }
 }
 
-async function createChatCompletionWithRetry(messages: MyMessage[], openai: OpenAI, retries = 5, timeoutMs = timeoutMsDefaultchatGPT) {
+async function createChatCompletionWithRetry(messages: MyMessage[], openai: OpenAI, retries = 5, timeoutMs = CHAT_GPT_DEFAULT_TIMEOUT_MS) {
   for (let i = 0; i < retries; i++) {
     try {
       const chatGPTAnswer = await pTimeout(
@@ -235,7 +235,7 @@ export async function createChatCompletionWithRetryReduceHistoryLongtermMemory(
   openai: OpenAI,
   pineconeIndex: any,
   retries = 5,
-  timeoutMs = timeoutMsDefaultchatGPT
+  timeoutMs = CHAT_GPT_DEFAULT_TIMEOUT_MS
 ): Promise<AxiosResponse<OpenAI.Chat.Completions.ChatCompletion, any> | undefined> {
   try {
     // Add long-term memory to the messages based on pineconeIndex
