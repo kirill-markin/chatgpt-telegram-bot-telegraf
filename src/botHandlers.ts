@@ -3,7 +3,7 @@ import { message } from "telegraf/filters";
 import { MyContext, User } from './types';
 import { 
   addOrUpdateUser, 
-  deactivateMessagesByChatId,
+  disableMessagesByChatId,
   insertEventSimple,
   saveCommandToDB,
 } from './database/database';
@@ -50,7 +50,7 @@ export function initializeBotHandlers(bot: Telegraf<MyContext>) {
   bot.command('reset', (ctx: MyContext) => {
     console.log(toLogFormat(ctx, `/reset command received`));
     if (ctx.chat && ctx.chat.id) {
-      deactivateMessagesByChatId(ctx.chat.id);
+      disableMessagesByChatId(ctx.chat.id);
     } else {
       throw new Error(`ctx.chat.id is undefined`);
     }

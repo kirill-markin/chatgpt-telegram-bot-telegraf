@@ -174,12 +174,12 @@ export const addEvent = async (event: Event) => {
   }
 }
 
-export const deleteMessagesByChatId = async (chat_id: number) => {
+export const removeMessagesByChatId = async (chat_id: number) => {
   const res = await pool.query('DELETE FROM messages WHERE chat_id = $1', [chat_id]);
   return res;
 }
 
-export const deactivateMessagesByChatId = async (chat_id: number) => {
+export const disableMessagesByChatId = async (chat_id: number) => {
   const res = await pool.query('UPDATE messages SET is_active = FALSE WHERE chat_id = $1', [chat_id]);
   return res;
 }
