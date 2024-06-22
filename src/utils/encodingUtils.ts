@@ -11,7 +11,7 @@ export function tokenizeText(text: string, model: TiktokenModel = 'gpt-3.5-turbo
   return tokens;
 }
 
-export function decodeTokens(tokens: Uint32Array, model: TiktokenModel = 'gpt-3.5-turbo'): string {
+export function convertTokensToText(tokens: Uint32Array, model: TiktokenModel = 'gpt-3.5-turbo'): string {
   const encoder = encoding_for_model(model);
   const text = encoder.decode(tokens);
   encoder.free(); // Free the encoder when done

@@ -3,7 +3,7 @@ import { MyContext, MyMessage, MyMessageContent, UserData } from './types';
 import { AxiosResponse } from 'axios';
 import pTimeout from 'p-timeout';
 import { toLogFormat } from './utils/utils';
-import { tokenizeText, decodeTokens } from './utils/encodingUtils';
+import { tokenizeText, convertTokensToText } from './utils/encodingUtils';
 import { CHAT_GPT_DEFAULT_TIMEOUT_MS, GPT_MODEL, MAX_TOKENS_THRESHOLD_TO_REDUCE_HISTORY, DEFAULT_PROMPT_MESSAGE } from './config';
 import { getUserUsedTokens, addOrUpdateUser, getUserByUserId } from './database/database';
 import { MAX_TRIAL_TOKENS, OPENAI_API_KEY } from './config';
@@ -167,7 +167,7 @@ export function truncateHistoryToTokenLimit(
             const tokensAvailable = maxTokens - resultTokenCount;
             if (tokensAvailable > 0) {
               const partialTokens = tokens.slice(0, tokensAvailable);
-              const partialContent = decodeTokens(partialTokens);
+              const partialContent = convertTokensToText(partialTokens);
               newContent.unshift({ ...part, text: partialContent });
               resultTokenCount += tokensAvailable;
             }
@@ -197,7 +197,7 @@ export function truncateHistoryToTokenLimit(
         const tokensAvailable = maxTokens - resultTokenCount;
         if (tokensAvailable > 0) {
           const partialTokens = tokens.slice(0, tokensAvailable);
-          const partialContent = decodeTokens(partialTokens);
+          const partialContent = convertTokensToText(partialTokens);
           acc.unshift({ ...message, content: partialContent });
           resultTokenCount += tokensAvailable;
           console.log(toLogFormat(ctx, `Partial tokens added (message.content): ${tokensAvailable}, resultTokenCount: ${resultTokenCount}`));
