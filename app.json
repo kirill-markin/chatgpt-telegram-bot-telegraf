@@ -1,0 +1,29 @@
+{
+  "name": "ChatGPT Telegram Bot",
+  "description": "An advanced Telegram bot using OpenAI's ChatGPT.",
+  "repository": "https://github.com/kirill-markin/chatgpt-telegram-bot-telegraf",
+  "env": {
+    "TELEGRAM_BOT_TOKEN": {
+      "description": "Your Telegram bot token",
+      "required": true
+    },
+    "OPENAI_API_KEY": {
+      "description": "Your OpenAI API key",
+      "required": true
+    },
+    "SETTINGS_PATH": {
+      "description": "Path to the settings file",
+      "value": "./settings/private_en.yaml"
+    }
+  },
+  "addons": [
+    {
+      "plan": "heroku-postgresql"
+    }
+  ],
+  "buildpacks": [
+    {
+      "url": "heroku/nodejs"
+    }
+  ]
+}

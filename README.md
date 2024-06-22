@@ -1,6 +1,6 @@
 # ChatGPT Telegram Bot via Telegraf
 
-ChatGPT Telegram Bot via Telegraf is an advanced Telegram bot designed to provide seamless text and voice interactions using OpenAI's ChatGPT. Built with the Telegraf framework, this bot allows users to ask ChatGPT questions via voice messages and receive text responses. Ideal for enhancing user engagement, customer support, and more, this bot leverages PostgreSQL for data storage and can integrate with Pinecone vector database to improve the quality of answers by utilizing long-term memory.
+ChatGPT Telegram Bot via Telegraf is an advanced Telegram bot designed to provide seamless text, voice, and photo interactions using OpenAI's ChatGPT. Built with the Telegraf framework, this bot allows users to ask ChatGPT questions via text messages, voice messages, and even photos, receiving text responses. Ideal for enhancing user engagement, customer support, and more, this bot leverages PostgreSQL for data storage and can integrate with Pinecone vector database to improve the quality of answers by utilizing long-term memory.
 
 ## Demo ChatGPT Telegram Bot
 
@@ -9,16 +9,19 @@ Telegram Bot from this repository is available at:
 
 Feel free to interact with the bot and test its capabilities!
 
-## Cloud Deployment
+## Cloud Deployment with One-Click Buttons
 
-[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/template/6T8UU3?referralCode=ln-goT)
+| [![Deploy to Heroku](https://www.herokucdn.com/deploy/button.svg)](https://heroku.com/deploy?template=https://github.com/kirill-markin/chatgpt-telegram-bot-telegraf) | [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy) | [![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/template/6T8UU3?referralCode=ln-goT) |
+|---|---|---|
 
 ## Features
 
-- **Text and Voice Message Processing**: Handles both text and voice messages, converting voice to text for processing.
+- **Text Message Processing**: Handles text messages, converting them to responses.
+- **Voice Message Processing**: Handles voice messages, converting them to text for processing.
+- **Photo Message Processing**: Handles photo messages, converting them to text for processing.
 - **OpenAI's ChatGPT Integration**: Utilizes the powerful ChatGPT model to generate responses.
-- **Docker Support**: Easily deployable using Docker.
 - **PostgreSQL Database**: Stores user data and interactions in a PostgreSQL database.
+- **Docker and Docker Compose Support**: Easily deploy the bot using Docker and Docker Compose.
 - **Pinecone Integration**: Optional long-term memory support using Pinecone.
 
 ## Configuration
