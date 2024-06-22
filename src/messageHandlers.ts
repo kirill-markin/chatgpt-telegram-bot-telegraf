@@ -16,7 +16,7 @@ import {
 } from "./utils/responseUtils";
 import { 
   storeAnswer, 
-  insertModelTranscriptionEvent, 
+  addTranscriptionEvent, 
   addEventByMessageType, 
   getAndConvertMessagesByChatId, 
   addMessage 
@@ -158,7 +158,7 @@ export async function handleVoiceMessage(ctx: MyContext, pineconeIndex: any) {
     const { transcriptionText, userData } = result;
 
     // Save the transcription event to the database
-    insertModelTranscriptionEvent(ctx, transcriptionText, userData);
+    addTranscriptionEvent(ctx, transcriptionText, userData);
     console.log(toLogFormat(ctx, `new voice transcription saved to the database`));
 
     // Process the transcribed message
@@ -181,7 +181,7 @@ export async function handleAudioFile(ctx: MyContext, fileId: string, mimeType: 
     const formattedTranscriptionText = `You sent an audio file. Transcription of this audio file:\n\n\`\`\`\n${transcriptionText}\n\`\`\`\n`;
 
     // Save the transcription event to the database
-    insertModelTranscriptionEvent(ctx, transcriptionText, userData);
+    addTranscriptionEvent(ctx, transcriptionText, userData);
     console.log(toLogFormat(ctx, `new audio transcription saved to the database`));
 
     // Save the formatted transcription text to the messages table

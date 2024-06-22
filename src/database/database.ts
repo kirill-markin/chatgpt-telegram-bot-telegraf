@@ -309,7 +309,7 @@ export async function addEventByMessageType(ctx: MyContext, eventType: string, m
   }
 }
 
-export async function insertModelTranscriptionEvent(ctx: MyContext, transcriptionText: string, userData: UserData) {
+export async function addTranscriptionEvent(ctx: MyContext, transcriptionText: string, userData: UserData) {
   try {
     addEvent({
       type: 'model_transcription',
