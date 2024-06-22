@@ -25,7 +25,7 @@ import {
   createCompletionWithRetriesAndMemory, 
   transcribeAudioWithRetries 
 } from './openAIFunctions';
-import { convertToMp3, encodeImageToBase64, resizeImage } from './utils/fileUtils';
+import { convertAudioToMp3, encodeImageToBase64, resizeImage } from './utils/fileUtils';
 
 async function handleUserMessageAndReply(
   ctx: MyContext, 
@@ -118,7 +118,7 @@ async function handleAudioFileCore(ctx: MyContext, fileId: string, mimeType: str
   let mp3FilePath = inputFilePath;
   if (mimeType !== 'audio/mp3') {
     mp3FilePath = `./temp/${fileId}.mp3`;
-    await convertToMp3(inputFilePath, mp3FilePath);
+    await convertAudioToMp3(inputFilePath, mp3FilePath);
     console.log(formatLogMessage(ctx, `audio file converted to mp3 as ${mp3FilePath}`));
   }
 

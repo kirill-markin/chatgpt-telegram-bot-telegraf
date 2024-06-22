@@ -3,7 +3,7 @@ import sharp from 'sharp';
 import { execFile } from 'child_process';
 import ffmpegPath from 'ffmpeg-static';
 
-export async function convertToMp3(inputFilePath: string, outputFilePath: string): Promise<string> {
+export async function convertAudioToMp3(inputFilePath: string, outputFilePath: string): Promise<string> {
   return new Promise((resolve, reject) => {
     if (!ffmpegPath) {
       return reject(new Error('ffmpegPath is null or undefined.'));
