@@ -51,7 +51,6 @@ export async function handleAnyMessage(ctx: MyContext, messageType: string) {
       const mimeType = ctx.message.audio?.mime_type;
 
       if (fileId && mimeType) {
-        await saveMessageToDatabase(ctx, fileId, 'audio');
         await handleAudioFile(ctx, userData, fileId, mimeType);
       } else {
         console.error(formatLogMessage(ctx, 'Received audio file, but file_id or mimeType is undefined'));
@@ -145,7 +144,7 @@ export async function replyToUser(ctx: MyContext, userData: UserData, pineconeIn
   }
 }
 
-async function handleAudioFileCore(ctx: MyContext, userData: UserData, fileId: string, mimeType: string | null) {
+async function handleAudioFileCore(ctx: MyContext, userData: UserData, fileId: string, mimeType: string | null) : Promise<string> {
   // Determine file extension
   const extension = mimeType ? mimeType.split('/')[1].replace('x-', '') : 'oga'; // Default to 'oga' if mimeType is null
   
@@ -213,6 +212,7 @@ export async function handleVoiceMessage(ctx: MyContext, userData: UserData) {
     addTranscriptionEvent(ctx, transcriptionText, userData);
     console.log(formatLogMessage(ctx, `new voice transcription saved to the database`));
 
+    const formattedTranscriptionText = `User sent a voice message. Transcription of this voice message:\n\n${transcriptionText}\n`;
     // Save the transcription text to the messages table
     await saveMessageToDatabase(ctx, transcriptionText, 'text');
 
@@ -222,13 +222,13 @@ export async function handleVoiceMessage(ctx: MyContext, userData: UserData) {
   }
 }
 
-export async function handleAudioFile(ctx: MyContext, userData: any, fileId: string, mimeType: string) {
+export async function handleAudioFile(ctx: MyContext, userData: any, fileId: string, mimeType: string): Promise<void> {
   try {
     const transcriptionText = await handleAudioFileCore(ctx, userData, fileId, mimeType);
     if (!transcriptionText) return;
 
     // Formatted transcription text
-    const formattedTranscriptionText = `You sent an audio file. Transcription of this audio file:\n\n\`\`\`\n${transcriptionText}\n\`\`\`\n`;
+    const formattedTranscriptionText = `You sent an audio file. Transcription of this audio file:\n\n${transcriptionText}\n`;
 
     // Save the transcription event to the database
     addTranscriptionEvent(ctx, transcriptionText, userData);
