@@ -93,7 +93,11 @@ async function processAudioCore(ctx: MyContext, fileId: string, mimeType: string
 
   // Determine file extension
   const extension = mimeType ? mimeType.split('/')[1].replace('x-', '') : 'oga'; // Default to 'oga' if mimeType is null
-  const inputFilePath = `./${fileId}.${extension}`;
+  
+  if (!fs.existsSync('./temp')) {
+    fs.mkdirSync('./temp');
+  }
+  const inputFilePath = `./temp/${fileId}.${extension}`;
 
   // Download the file
   const url = await ctx.telegram.getFileLink(fileId);
@@ -113,7 +117,7 @@ async function processAudioCore(ctx: MyContext, fileId: string, mimeType: string
   // Convert the file to mp3 if necessary
   let mp3FilePath = inputFilePath;
   if (mimeType !== 'audio/mp3') {
-    mp3FilePath = `./${fileId}.mp3`;
+    mp3FilePath = `./temp/${fileId}.mp3`;
     await convertToMp3(inputFilePath, mp3FilePath);
     console.log(toLogFormat(ctx, `audio file converted to mp3 as ${mp3FilePath}`));
   }
