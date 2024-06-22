@@ -70,7 +70,7 @@ async function handleUserMessageAndReply(
   return chatResponse;
 }
 
-export async function processMessage(ctx: MyContext, messageContent: string, eventType: string, messageType: string, pineconeIndex: any) {
+export async function handleMessage(ctx: MyContext, messageContent: string, eventType: string, messageType: string, pineconeIndex: any) {
   console.log(toLogFormat(ctx, `new ${messageType} message received`));
   
   try {
@@ -162,7 +162,7 @@ export async function processVoiceMessage(ctx: MyContext, pineconeIndex: any) {
     console.log(toLogFormat(ctx, `new voice transcription saved to the database`));
 
     // Process the transcribed message
-    await processMessage(ctx, transcriptionText, 'user_message', 'voice', pineconeIndex);
+    await handleMessage(ctx, transcriptionText, 'user_message', 'voice', pineconeIndex);
 
   } catch (e) {
     console.error(toLogFormat(ctx, `[ERROR] error occurred: ${e}`));
@@ -244,7 +244,7 @@ export async function processPhotoMessage(ctx: MyContext, pineconeIndex: any) {
     // Send the message to OpenAI
     const userData = await getUserDataOrReplyWithError(ctx);
     if (!userData) return;
-    await processMessage(ctx, base64Content, 'user_message', 'photo', pineconeIndex);
+    await handleMessage(ctx, base64Content, 'user_message', 'photo', pineconeIndex);
 
   } catch (error) {
     console.error(toLogFormat(ctx, `[ERROR] error occurred: ${error}`));

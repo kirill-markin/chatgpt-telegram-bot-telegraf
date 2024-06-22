@@ -13,7 +13,7 @@ import {
   HELP_MESSAGE,
 } from './config';
 import { 
-  processMessage, 
+  handleMessage, 
   processVoiceMessage, 
   processAudioFile, 
   processPhotoMessage 
@@ -100,7 +100,7 @@ export function setupBotHandlers(bot: Telegraf<MyContext>) {
       console.log(toLogFormat(ctx, `full message collected. length: ${fullMessage.length}`));
       messageData.messages = []; // Clear the messages array
 
-      await processMessage(ctx, fullMessage, 'user_message', 'text', pineconeIndex);
+      await handleMessage(ctx, fullMessage, 'user_message', 'text', pineconeIndex);
     }, 4000);
 
     // Save the message buffer
