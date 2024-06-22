@@ -8,7 +8,7 @@ import {
   fetchUserDataOrReplyWithError,
 } from "./utils/utils";
 import {
-  processAndTruncateMessages,
+  truncateMessages,
 } from "./utils/messageUtils";
 import { 
   handleResponseSending,
@@ -48,7 +48,7 @@ async function handleUserMessageAndReply(
   // Load all related messages from the database
   let messages: MyMessage[] = await getAndConvertMessagesByChatId(ctx);
 
-  const truncatedMessages = processAndTruncateMessages(messages);
+  const truncatedMessages = truncateMessages(messages);
   // DEBUG: messages to console in a pretty format JSON with newlines
   // console.log(JSON.stringify(truncatedMessages, null, 2));
 

@@ -11,7 +11,7 @@ export const generateMessageBufferKey = (ctx: MyContext) => {
 
 const THRESHOLD_TO_TRUNK_MESSGES_FOR_CONSOLE = 100; // Length threshold for strings
 
-export function processAndTruncateMessages(messages: MyMessage[], threshold: number = THRESHOLD_TO_TRUNK_MESSGES_FOR_CONSOLE): MyMessage[] {
+export function truncateMessages(messages: MyMessage[], threshold: number = THRESHOLD_TO_TRUNK_MESSGES_FOR_CONSOLE): MyMessage[] {
   return messages.map((message) => {
     // Deep clone the message object to avoid mutating the original
     const newMessage = JSON.parse(JSON.stringify(message));
