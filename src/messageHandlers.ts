@@ -27,7 +27,7 @@ import {
 } from './openAIFunctions';
 import { convertToMp3, encodeImageToBase64, resizeImage } from './utils/fileUtils';
 
-async function processUserMessageAndRespond(
+async function handleUserMessageAndReply(
   ctx: MyContext, 
   messageContent: string, 
   userData: UserData, 
@@ -79,7 +79,7 @@ export async function processMessage(ctx: MyContext, messageContent: string, eve
     insertEventViaMessageType(ctx, eventType, messageType, messageContent);
     console.log(toLogFormat(ctx, `new ${messageType} message saved to the events table`));
 
-    await processUserMessageAndRespond(ctx, messageContent, userData, pineconeIndex);
+    await handleUserMessageAndReply(ctx, messageContent, userData, pineconeIndex);
 
   } catch (e) {
     console.error(toLogFormat(ctx, `[ERROR] error occurred: ${e}`));
