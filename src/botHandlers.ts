@@ -25,7 +25,7 @@ import { pineconeIndex } from './vectorDatabase';
 // Create a map to store the message buffers
 const messageBuffers = new Map();
 
-export function setupBotHandlers(bot: Telegraf<MyContext>) {
+export function initializeBotHandlers(bot: Telegraf<MyContext>) {
 
   bot.start(async (ctx: MyContext) => {
     console.log(toLogFormat(ctx, 'start command received'));
