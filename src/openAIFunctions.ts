@@ -8,7 +8,7 @@ import { CHAT_GPT_DEFAULT_TIMEOUT_MS, GPT_MODEL, maxTokensThresholdToReduceHisto
 import { usedTokensForUser, insertUserOrUpdate, selectUserByUserId } from './database/database';
 import { maxTrialsTokens, OPENAI_API_KEY } from './config';
 
-export const APROX_IMG_TOKENS = 800;
+export const APPROX_IMAGE_TOKENS = 800;
 
 class NoOpenAiApiKeyError extends Error {
   constructor(message: string) {
@@ -140,7 +140,7 @@ export function reduceHistoryWithTokenLimit(
           const tokens = encodeText(part.text!);
           initialTokenCount += tokens.length;
         } else if (part.type === 'image_url') {
-          initialTokenCount += APROX_IMG_TOKENS;
+          initialTokenCount += APPROX_IMAGE_TOKENS;
         }
       });
     } else {
@@ -174,7 +174,7 @@ export function reduceHistoryWithTokenLimit(
             break;
           }
         } else if (part.type === 'image_url') {
-          const imageTokenCount = APROX_IMG_TOKENS;
+          const imageTokenCount = APPROX_IMAGE_TOKENS;
           if (resultTokenCount + imageTokenCount <= maxTokens) {
             newContent.unshift(part);
             messageTokenCount += imageTokenCount;
@@ -218,7 +218,7 @@ export function calculateTotalTokens(messages: MyMessage[]): number {
         if (part.type === 'text') {
           return msgTotal + encodeText(part.text!).length;
         } else if (part.type === 'image_url') {
-          return msgTotal + APROX_IMG_TOKENS;
+          return msgTotal + APPROX_IMAGE_TOKENS;
         }
         return msgTotal;
       }, 0);

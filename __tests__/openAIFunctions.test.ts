@@ -1,4 +1,4 @@
-import { reduceHistoryWithTokenLimit, calculateTotalTokens, APROX_IMG_TOKENS } from '../src/openAIFunctions';
+import { reduceHistoryWithTokenLimit, calculateTotalTokens, APPROX_IMAGE_TOKENS } from '../src/openAIFunctions';
 import { MyContext, MyMessage } from '../src/types';
 
 // Mock data
@@ -87,7 +87,7 @@ describe('calculateTotalTokens', () => {
     const totalTokens = calculateTotalTokens(mockMessages);
     
     // Assuming some hypothetical token counts for the messages
-    const expectedTokens = 54 + APROX_IMG_TOKENS; // Replace this with the actual expected token count
+    const expectedTokens = 54 + APPROX_IMAGE_TOKENS; // Replace this with the actual expected token count
     expect(totalTokens).toEqual(expectedTokens);
   });
 
