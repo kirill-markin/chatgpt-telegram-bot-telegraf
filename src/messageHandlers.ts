@@ -10,6 +10,7 @@ import { truncateMessages } from "./utils/messageUtils";
 import { 
   sendResponse,
   sendSplitMessage,
+  sendTypingActionPeriodically,
 } from "./utils/responseUtils";
 import { 
   storeAnswer, 
@@ -103,39 +104,33 @@ export async function handleAnyMessage(ctx: MyContext, messageType: string) {
   messageBuffers.set(key, messageData);
 }
 
-export async function replyToUser(
-  ctx: MyContext,
-  pineconeIndex: any 
-) {
+export async function replyToUser(ctx: MyContext, pineconeIndex: any) {
+  const stopTyping = await sendTypingActionPeriodically(ctx, 5000); // Start the typing action
   try {
     const userData = await fetchUserDataOrReplyWithError(ctx);
     if (!userData) return null;
 
-    // Load all related messages from the database
     let messages: MyMessage[] = await getAndConvertMessagesByChatId(ctx);
 
     // DEBUG: messages to console in a pretty format JSON with newlines
     // console.log(`messages: ${JSON.stringify(truncateMessages(messages), null, 2)}`);
 
-    // Send these messages to OpenAI's Chat GPT model
     const chatResponse: any = await createCompletionWithRetriesAndMemory(
       ctx,
       messages,
       userData.openai,
       pineconeIndex,
     );
-    console.log(formatLogMessage(ctx, `chatGPT response received`));
 
-    // Save the response tothe database
     storeAnswer(chatResponse, ctx, userData);
-
-    // Send the response to the user
     await sendResponse(ctx, chatResponse);
 
     return chatResponse;
   } catch (e) {
     console.error(formatLogMessage(ctx, `[ERROR] error occurred: ${e}`));
     ctx.reply(ERROR_MESSAGE);
+  } finally {
+    stopTyping(); // Stop the typing action
   }
 }
 

@@ -30,4 +30,21 @@ export async function sendResponse(ctx: MyContext, chatResponse: any) {
     await sendSplitMessage(ctx, "An error occurred while processing your request. Please try again later.");
   }
 }
-  
+
+export async function sendTypingActionPeriodically(ctx: MyContext, intervalMs: number): Promise<() => void> {
+  let isTyping = true;
+
+  const sendTyping = async () => {
+    while (isTyping) {
+      // @ts-ignore
+      await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
+      await new Promise(resolve => setTimeout(resolve, intervalMs));
+    }
+  };
+
+  sendTyping();
+
+  return () => {
+    isTyping = false;
+  };
+}

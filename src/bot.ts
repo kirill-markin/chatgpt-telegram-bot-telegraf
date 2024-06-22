@@ -30,25 +30,6 @@ bot.use(async (ctx: MyContext, next) => {
   let isNextDone = false;
   const stopSignal = () => isNextDone;
 
-  let chatId: number = -1;
-  if (ctx.chat && ctx.chat.id) {
-    chatId = ctx.chat.id;
-  } else {
-    throw new Error("ctx.chat.id is undefined");
-  }
-
-  if (chatId !== -1) {
-    try {
-      await ctx.telegram.sendChatAction(chatId, 'typing');
-    } catch (error: Error | any) {
-      if (error.response && error.response.error_code === 403) {
-        console.log(`User ${chatId} has blocked the bot.`);
-      } else {
-        console.error('Unexpected error:', error);
-      }
-    }
-  }
-
   await next();
   isNextDone = true;
 
