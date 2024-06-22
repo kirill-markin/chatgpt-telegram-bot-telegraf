@@ -60,6 +60,12 @@ Feel free to interact with the bot and test its capabilities!
     docker-compose up -d
     ```
 
+3. To stop the services, run:
+
+    ```bash
+    docker-compose down
+    ```
+
 ## Running with Docker
 
 1. Build and run the Docker container:
@@ -75,9 +81,10 @@ Feel free to interact with the bot and test its capabilities!
 
 Ensure you have met the following requirements:
 
-- Node.js and npm installed
+- Node.js and npm installed, long-term support (lts) version recomended to avoid warnings
 - PostgreSQL database
 - OpenAI API key
+- Docker and Docker Compose (optional)
 - Pinecone API key (optional)
 
 ### Steps
