@@ -5,11 +5,13 @@ import { UserData } from "./types";
 import { errorString } from './config';
 import { 
   toLogFormat, 
-  handleResponseSending,
   getUserDataOrReplyWithError,
-  sendLongMessage,
   processAndTruncateMessages,
 } from "./utils";
+import { 
+  handleResponseSending,
+  sendLongMessage,
+} from "./responseUtils";
 import { 
   saveAnswerToDB, 
   insertModelTranscriptionEvent, 

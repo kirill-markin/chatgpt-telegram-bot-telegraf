@@ -9,19 +9,6 @@ import {
 } from './openAIFunctions';
 import { UserData } from './types';
 
-const MAX_MESSAGE_LENGTH = 4096;
-
-export async function sendLongMessage(ctx: MyContext, message: string) {
-  if (message.length > MAX_MESSAGE_LENGTH) {
-    for (let i = 0; i < message.length; i += MAX_MESSAGE_LENGTH) {
-      const messagePart = message.substring(i, i + MAX_MESSAGE_LENGTH);
-      await ctx.reply(messagePart);
-    }
-  } else {
-    await ctx.reply(message);
-  }
-}
-
 export const toLogFormat = (ctx: MyContext, logMessage: string) => {
   const chat_id = ctx.chat?.id;
   const username = ctx.from?.username || ctx.from?.id;
@@ -52,22 +39,6 @@ export function decodeTokens(tokens: Uint32Array, model: TiktokenModel = 'gpt-3.
   const text = encoder.decode(tokens);
   encoder.free(); // Free the encoder when done
   return new TextDecoder().decode(text);
-}
-
-// Function to handle the response sending logic
-export async function handleResponseSending(ctx: MyContext, chatResponse: any) {
-  try {
-    let answer = chatResponse?.choices?.[0]?.message?.content ?? NO_ANSWER_ERROR;
-    
-    // Use the utility function to send the answer, whether it's long or short
-    await sendLongMessage(ctx, answer);
-  
-    console.log(toLogFormat(ctx, 'answer sent to the user'));
-  } catch (e) {
-    console.error(toLogFormat(ctx, `[ERROR] error in sending the answer to the user: ${e}`));
-    // Use the utility function to inform the user of an error in a standardized way
-    await sendLongMessage(ctx, "An error occurred while processing your request. Please try again later.");
-  }
 }
 
 class NoOpenAiApiKeyError extends Error {
