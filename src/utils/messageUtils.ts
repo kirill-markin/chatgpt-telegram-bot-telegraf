@@ -1,5 +1,5 @@
 import { MyContext, MyMessage } from '../types';
-import { truncateString } from './encodingUtils';
+import { truncateText } from './encodingUtils';
 
 export const getMessageBufferKey = (ctx: MyContext) => {
   if (ctx.chat && ctx.from) {
@@ -18,17 +18,17 @@ export function processAndTruncateMessages(messages: MyMessage[], threshold: num
   
     if (typeof newMessage.content === 'string') {
       // Truncate the content if it's a string
-      newMessage.content = truncateString(newMessage.content, threshold);
+      newMessage.content = truncateText(newMessage.content, threshold);
     } else if (Array.isArray(newMessage.content)) {
       // Iterate through content array and truncate strings
       // @ts-ignore
       newMessage.content = newMessage.content.map((item) => {
         if (item.type === 'text' && item.text) {
           // Truncate text content
-          item.text = truncateString(item.text, threshold);
+          item.text = truncateText(item.text, threshold);
         } else if (item.type === 'image_url' && item.image_url && item.image_url.url) {
           // Truncate image URL
-          item.image_url.url = truncateString(item.image_url.url, threshold);
+          item.image_url.url = truncateText(item.image_url.url, threshold);
         }
         return item;
       });

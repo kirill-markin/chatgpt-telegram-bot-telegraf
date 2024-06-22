@@ -18,7 +18,7 @@ export function convertTokensToText(tokens: Uint32Array, model: TiktokenModel = 
   return new TextDecoder().decode(text);
 }
 
-export function truncateString(str: string, threshold: number): string {
+export function truncateText(str: string, threshold: number): string {
   if (str.length <= threshold) return str;
   const start = str.slice(0, threshold / 2);
   const end = str.slice(-threshold / 2);
