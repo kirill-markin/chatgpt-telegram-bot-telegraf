@@ -325,6 +325,7 @@ export async function createChatCompletionWithRetryReduceHistoryLongtermMemory(
     throw error;
   }
 }
+
 export function createTranscriptionWithRetry(fileStream: File, openai: OpenAI, retries = 3): Promise<any> {
   return openai.audio.transcriptions.create({ model: "whisper-1", file: fileStream })
     .catch((error) => {
