@@ -11,7 +11,7 @@ Feel free to interact with the bot and test its capabilities!
 
 ## Cloud Deployment with One-Click Buttons
 
-| [![Deploy to Heroku](https://www.herokucdn.com/deploy/button.svg)](https://heroku.com/deploy?template=https://github.com/kirill-markin/chatgpt-telegram-bot-telegraf) | [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy) | [![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/template/6T8UU3?referralCode=ln-goT) |
+| [![Deploy to Heroku](https://www.herokucdn.com/deploy/button.svg)](https://heroku.com/deploy) | [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy) | [![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/template/6T8UU3?referralCode=ln-goT) |
 |---|---|---|
 
 ## Features
