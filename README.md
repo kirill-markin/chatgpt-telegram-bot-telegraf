@@ -117,6 +117,58 @@ Ensure you have met the following requirements:
     npm test
     ```
 
+## User Management
+
+### Setting a User as PREMIUM
+
+You can set a user as PREMIUM via the command line.
+
+1. Ensure all dependencies are installed:
+
+   ```sh
+   npm install
+   ```
+
+2. Use the following command to set a user as PREMIUM:
+
+   ```sh
+   npm run set-premium <userId>
+   ```
+
+   Replace `<userId>` with the ID of the user you want to set as PREMIUM.
+
+Example:
+
+```sh
+npm run set-premium 123456789
+```
+
+Please google how to get the user ID in Telegram, as it is not the same as the username.
+
+### Removing PREMIUM Status from a User
+
+To remove the PREMIUM status from a user, use the following command:
+
+```sh
+npm run remove-premium <userId>
+```
+
+Example:
+
+```sh
+npm run remove-premium 123456789
+```
+
+### Listing All PREMIUM Users
+
+To print list of all PREMIUM users, use the following command:
+
+```sh
+npm run list-premium
+```
+
+The output will include the user ID, username, and the creation date formatted as `Created at: YYYY-MM-DD HH:MM:SS UTC`, sorted by the most recent creation date first.
+
 ## Table Entities Description
 
 - The `users` table stores information about the bot users.

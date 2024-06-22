@@ -6,12 +6,16 @@
   "license": "MIT",
   "scripts": {
     "start": "ts-node --transpile-only src/bot.ts",
-    "test": "jest"
+    "test": "jest",
+    "set-premium": "ts-node src/cli.ts set-premium",
+    "remove-premium": "ts-node src/cli.ts remove-premium",
+    "list-premium": "ts-node src/cli.ts list-premium"
   },
   "dependencies": {
     "@pinecone-database/pinecone": "^2.2.1",
     "axios": "^1.4.0",
     "body-parser": "^1.19.0",
+    "commander": "^12.1.0",
     "cross-fetch": "^4.0.0",
     "dotenv": "^16.4.5",
     "express": "^4.17.1",
@@ -29,6 +33,7 @@
     "yaml": "^2.3.4"
   },
   "devDependencies": {
+    "@types/commander": "^2.12.2",
     "@types/express": "^4.17.17",
     "@types/fluent-ffmpeg": "^2.1.21",
     "@types/jest": "^29.5.12",

@@ -340,3 +340,13 @@ export async function addTranscriptionEvent(ctx: MyContext, transcriptionText: s
     console.log(formatLogMessage(ctx, `[ERROR] error in saving the model_transcription to the database: ${error}`));
   }
 }
+
+export const getAllPremiumUsers = async () => {
+  const res = await pool.query(`
+    SELECT user_id, username, created_at 
+    FROM users 
+    WHERE usage_type = $1 
+    ORDER BY created_at DESC NULLS LAST
+  `, ['premium']);
+  return res.rows;
+};
