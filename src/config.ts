@@ -7,12 +7,14 @@ if (fs.existsSync(".env")) {
   dotenv.config();
 }
 
-if (
-  typeof process.env.OPENAI_API_KEY !== 'string' ||
-  typeof process.env.DATABASE_URL !== 'string' ||
-  typeof process.env.TELEGRAM_BOT_TOKEN !== 'string'
-) {
-  throw new Error('OPENAI_API_KEY and DATABASE_URL and TELEGRAM_BOT_TOKEN must be defined');
+if (typeof process.env.OPENAI_API_KEY !== 'string' || process.env.OPENAI_API_KEY === '') {
+  throw new Error('OPENAI_API_KEY must be defined');
+}
+if (typeof process.env.DATABASE_URL !== 'string' || process.env.DATABASE_URL === '') {
+  throw new Error('DATABASE_URL must be defined');
+}
+if (typeof process.env.TELEGRAM_BOT_TOKEN !== 'string' || process.env.TELEGRAM_BOT_TOKEN === '') {
+  throw new Error('TELEGRAM_BOT_TOKEN must be defined');
 }
 
 export const DATABASE_URL : string = process.env.DATABASE_URL;
