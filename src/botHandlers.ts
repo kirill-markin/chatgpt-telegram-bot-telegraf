@@ -86,6 +86,7 @@ export function initializeBotHandlers(bot: Telegraf<MyContext>) {
     const key = generateMessageBufferKey(ctx);
     const messageData = messageBuffers.get(key) || { messages: [], timer: null };
 
+    // @ts-ignore
     messageData.messages.push(ctx.message?.text || '');
 
     // Clear the old timer
@@ -108,8 +109,11 @@ export function initializeBotHandlers(bot: Telegraf<MyContext>) {
   });
 
   bot.on(message('document'), async (ctx: MyContext) => {
+    // @ts-ignore
     const fileId = ctx.message.document?.file_id;
+    // @ts-ignore
     const fileName = ctx.message.document?.file_name;
+    // @ts-ignore
     const mimeType = ctx.message.document?.mime_type;
 
     if (fileId && mimeType) {
@@ -126,7 +130,9 @@ export function initializeBotHandlers(bot: Telegraf<MyContext>) {
   });
 
   bot.on(message('audio'), async (ctx: MyContext) => {
+    // @ts-ignore
     const fileId = ctx.message.audio?.file_id;
+    // @ts-ignore
     const mimeType = ctx.message.audio?.mime_type;
 
     if (fileId && mimeType) {
