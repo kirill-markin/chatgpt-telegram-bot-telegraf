@@ -4,7 +4,7 @@ import { MyContext, MyMessage } from "./types";
 import { UserData } from "./types";
 import { ERROR_MESSAGE } from './config';
 import { 
-  toLogFormat, 
+  formatLogMessage, 
   getUserDataOrReplyWithError,
 } from "./utils/utils";
 import {
@@ -59,7 +59,7 @@ async function handleUserMessageAndReply(
     userData.openai,
     pineconeIndex,
   );
-  console.log(toLogFormat(ctx, `chatGPT response received`));
+  console.log(formatLogMessage(ctx, `chatGPT response received`));
 
   // Save the response tothe database
   storeAnswer(chatResponse, ctx, userData);
@@ -71,18 +71,18 @@ async function handleUserMessageAndReply(
 }
 
 export async function handleMessage(ctx: MyContext, messageContent: string, eventType: string, messageType: string, pineconeIndex: any) {
-  console.log(toLogFormat(ctx, `new ${messageType} message received`));
+  console.log(formatLogMessage(ctx, `new ${messageType} message received`));
   
   try {
     const userData = await getUserDataOrReplyWithError(ctx);
     if (!userData) return;
     addEventByMessageType(ctx, eventType, messageType, messageContent);
-    console.log(toLogFormat(ctx, `new ${messageType} message saved to the events table`));
+    console.log(formatLogMessage(ctx, `new ${messageType} message saved to the events table`));
 
     await handleUserMessageAndReply(ctx, messageContent, userData, pineconeIndex);
 
   } catch (e) {
-    console.error(toLogFormat(ctx, `[ERROR] error occurred: ${e}`));
+    console.error(formatLogMessage(ctx, `[ERROR] error occurred: ${e}`));
     ctx.reply(ERROR_MESSAGE);
   }
 }
@@ -107,7 +107,7 @@ async function handleAudioFileCore(ctx: MyContext, fileId: string, mimeType: str
       .on('error', reject)
       .on('finish', resolve);
   });
-  console.log(toLogFormat(ctx, `audio file downloaded as ${inputFilePath}`));
+  console.log(formatLogMessage(ctx, `audio file downloaded as ${inputFilePath}`));
 
   // Check if file exists
   if (!fs.existsSync(inputFilePath)) {
@@ -119,7 +119,7 @@ async function handleAudioFileCore(ctx: MyContext, fileId: string, mimeType: str
   if (mimeType !== 'audio/mp3') {
     mp3FilePath = `./temp/${fileId}.mp3`;
     await convertToMp3(inputFilePath, mp3FilePath);
-    console.log(toLogFormat(ctx, `audio file converted to mp3 as ${mp3FilePath}`));
+    console.log(formatLogMessage(ctx, `audio file converted to mp3 as ${mp3FilePath}`));
   }
 
   // Check if mp3 file exists
@@ -131,14 +131,14 @@ async function handleAudioFileCore(ctx: MyContext, fileId: string, mimeType: str
   // @ts-ignore
   const transcription = await transcribeAudioWithRetries(fs.createReadStream(mp3FilePath), userData.openai);
   const transcriptionText = transcription.text;
-  console.log(toLogFormat(ctx, "audio transcription received"));
+  console.log(formatLogMessage(ctx, "audio transcription received"));
 
   // Clean up files
   fs.unlink(inputFilePath, (err) => { if (err) console.error(err); });
   if (inputFilePath !== mp3FilePath) {
     fs.unlink(mp3FilePath, (err) => { if (err) console.error(err); });
   }
-  console.log(toLogFormat(ctx, "audio processing finished"));
+  console.log(formatLogMessage(ctx, "audio processing finished"));
 
   return { transcriptionText, userData };
 }
@@ -159,13 +159,13 @@ export async function handleVoiceMessage(ctx: MyContext, pineconeIndex: any) {
 
     // Save the transcription event to the database
     addTranscriptionEvent(ctx, transcriptionText, userData);
-    console.log(toLogFormat(ctx, `new voice transcription saved to the database`));
+    console.log(formatLogMessage(ctx, `new voice transcription saved to the database`));
 
     // Process the transcribed message
     await handleMessage(ctx, transcriptionText, 'user_message', 'voice', pineconeIndex);
 
   } catch (e) {
-    console.error(toLogFormat(ctx, `[ERROR] error occurred: ${e}`));
+    console.error(formatLogMessage(ctx, `[ERROR] error occurred: ${e}`));
     ctx.reply(ERROR_MESSAGE);
   }
 }
@@ -182,7 +182,7 @@ export async function handleAudioFile(ctx: MyContext, fileId: string, mimeType: 
 
     // Save the transcription event to the database
     addTranscriptionEvent(ctx, transcriptionText, userData);
-    console.log(toLogFormat(ctx, `new audio transcription saved to the database`));
+    console.log(formatLogMessage(ctx, `new audio transcription saved to the database`));
 
     // Save the formatted transcription text to the messages table
     if (ctx.chat && ctx.chat.id) {
@@ -192,7 +192,7 @@ export async function handleAudioFile(ctx: MyContext, fileId: string, mimeType: 
         chat_id: ctx.chat.id,
         user_id: null,
       });
-      console.log(toLogFormat(ctx, "formatted transcription text saved to the messages table"));
+      console.log(formatLogMessage(ctx, "formatted transcription text saved to the messages table"));
     } else {
       throw new Error(`ctx.chat.id is undefined`);
     }
@@ -201,7 +201,7 @@ export async function handleAudioFile(ctx: MyContext, fileId: string, mimeType: 
     await sendLongMessage(ctx, formattedTranscriptionText);
 
   } catch (e) {
-    console.error(toLogFormat(ctx, `[ERROR] error occurred: ${e}`));
+    console.error(formatLogMessage(ctx, `[ERROR] error occurred: ${e}`));
     ctx.reply(ERROR_MESSAGE);
   }
 }
@@ -227,7 +227,7 @@ export async function handlePhotoMessage(ctx: MyContext, pineconeIndex: any) {
 
     // Resize the image
     await resizeImage(inputFilePath, resizedFilePath, 1024, 1024);
-    console.log(toLogFormat(ctx, `photo resized to 1024x1024 max as ${resizedFilePath}`));
+    console.log(formatLogMessage(ctx, `photo resized to 1024x1024 max as ${resizedFilePath}`));
 
     // Encode the image to base64
     const base64Image = await encodeImageToBase64(resizedFilePath);
@@ -247,7 +247,7 @@ export async function handlePhotoMessage(ctx: MyContext, pineconeIndex: any) {
     await handleMessage(ctx, base64Content, 'user_message', 'photo', pineconeIndex);
 
   } catch (error) {
-    console.error(toLogFormat(ctx, `[ERROR] error occurred: ${error}`));
+    console.error(formatLogMessage(ctx, `[ERROR] error occurred: ${error}`));
     ctx.reply(ERROR_MESSAGE);
   }
 }

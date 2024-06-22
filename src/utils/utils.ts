@@ -14,7 +14,7 @@ class NoOpenAiApiKeyError extends Error {
   }
 }
 
-export const toLogFormat = (ctx: MyContext, logMessage: string) => {
+export const formatLogMessage = (ctx: MyContext, logMessage: string) => {
   const chat_id = ctx.chat?.id;
   const username = ctx.from?.username || ctx.from?.id;
   return `Chat: ${chat_id}, User: ${username}: ${logMessage}`;

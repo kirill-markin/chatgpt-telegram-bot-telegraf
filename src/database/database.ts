@@ -1,6 +1,6 @@
 import { Pool } from 'pg';
 import { MyContext, MyMessage, MyMessageContent, User, Event, UserData } from '../types';
-import { toLogFormat } from '../utils/utils';
+import { formatLogMessage } from '../utils/utils';
 import { DATABASE_URL, NO_ANSWER_ERROR } from '../config';
 
 if (typeof DATABASE_URL !== 'string') {
@@ -29,7 +29,7 @@ const getMessagesByChatId = async (ctx: MyContext): Promise<MyMessage[]> => {
         AND time >= NOW() - INTERVAL '16 hours' 
       ORDER BY id
     `, [ctx.chat.id]);
-    console.log(toLogFormat(ctx, `messages received from the database: ${res.rows.length}`));
+    console.log(formatLogMessage(ctx, `messages received from the database: ${res.rows.length}`));
     return res.rows as MyMessage[];
   } else {
     throw new Error('ctx.chat.id is undefined');
@@ -217,9 +217,9 @@ export async function storeAnswer(chatResponse: any, ctx: MyContext, userData: U
       usage_total_tokens: chatResponse.usage?.total_tokens || null,
       api_key: userData.openai.apiKey || null,
     } as Event);
-    console.log(toLogFormat(ctx, `answer saved to the database. total_tokens for this answer: ${chatResponse.usage?.total_tokens || null}`));
+    console.log(formatLogMessage(ctx, `answer saved to the database. total_tokens for this answer: ${chatResponse.usage?.total_tokens || null}`));
   } catch (error) {
-    console.log(toLogFormat(ctx, `[ERROR] error in saving the answer to the database: ${error}`));
+    console.log(formatLogMessage(ctx, `[ERROR] error in saving the answer to the database: ${error}`));
   }
 }
 
@@ -245,9 +245,9 @@ export async function storeCommand(ctx: MyContext, command: string) {
       usage_total_tokens: null,
       api_key: null,
     } as Event);
-    console.log(toLogFormat(ctx, `${command} saved to the database`));
+    console.log(formatLogMessage(ctx, `${command} saved to the database`));
   } catch (error) {
-    console.log(toLogFormat(ctx, `[ERROR] error in saving the command to the database: ${error}`));
+    console.log(formatLogMessage(ctx, `[ERROR] error in saving the command to the database: ${error}`));
   }
 }
 
@@ -274,9 +274,9 @@ export async function addSimpleEvent(ctx: MyContext, type: string, message_role:
       usage_total_tokens: null,
       api_key: null,
     } as Event);
-    console.log(toLogFormat(ctx, `${message_role} saved to the database`));
+    console.log(formatLogMessage(ctx, `${message_role} saved to the database`));
   } catch (error) {
-    console.log(toLogFormat(ctx, `[ERROR] error in saving the ${message_role} to the database: ${error}`));
+    console.log(formatLogMessage(ctx, `[ERROR] error in saving the ${message_role} to the database: ${error}`));
   }
 }
 
@@ -303,9 +303,9 @@ export async function addEventByMessageType(ctx: MyContext, eventType: string, m
       usage_total_tokens: null,
       api_key: null,
     } as Event);
-    console.log(toLogFormat(ctx, `${messageType} saved to the database`));
+    console.log(formatLogMessage(ctx, `${messageType} saved to the database`));
   } catch (error) {
-    console.log(toLogFormat(ctx, `[ERROR] error in saving the ${messageType} to the database: ${error}`));
+    console.log(formatLogMessage(ctx, `[ERROR] error in saving the ${messageType} to the database: ${error}`));
   }
 }
 
@@ -335,8 +335,8 @@ export async function addTranscriptionEvent(ctx: MyContext, transcriptionText: s
       usage_total_tokens: null,
       api_key: userData.openai.apiKey || null,
     } as Event);
-    console.log(toLogFormat(ctx, `model_transcription saved to the database`));
+    console.log(formatLogMessage(ctx, `model_transcription saved to the database`));
   } catch (error) {
-    console.log(toLogFormat(ctx, `[ERROR] error in saving the model_transcription to the database: ${error}`));
+    console.log(formatLogMessage(ctx, `[ERROR] error in saving the model_transcription to the database: ${error}`));
   }
 }

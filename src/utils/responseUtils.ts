@@ -1,5 +1,5 @@
 import { MyContext } from '../types';
-import { toLogFormat } from './utils';
+import { formatLogMessage } from './utils';
 import { NO_ANSWER_ERROR } from '../config';
 
 const MAX_MESSAGE_LENGTH_TELEGRAM = 4096;
@@ -23,9 +23,9 @@ export async function handleResponseSending(ctx: MyContext, chatResponse: any) {
     // Use the utility function to send the answer, whether it's long or short
     await sendLongMessage(ctx, answer);
   
-    console.log(toLogFormat(ctx, 'answer sent to the user'));
+    console.log(formatLogMessage(ctx, 'answer sent to the user'));
   } catch (e) {
-    console.error(toLogFormat(ctx, `[ERROR] error in sending the answer to the user: ${e}`));
+    console.error(formatLogMessage(ctx, `[ERROR] error in sending the answer to the user: ${e}`));
     // Use the utility function to inform the user of an error in a standardized way
     await sendLongMessage(ctx, "An error occurred while processing your request. Please try again later.");
   }
