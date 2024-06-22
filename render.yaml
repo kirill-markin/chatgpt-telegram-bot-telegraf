@@ -6,9 +6,13 @@ services:
     dockerfilePath: ./Dockerfile
     envVars:
       - key: TELEGRAM_BOT_TOKEN
-        from: TELEGRAM_BOT_TOKEN
+        sync: false
       - key: OPENAI_API_KEY
-        from: OPENAI_API_KEY
+        sync: false
+      - key: DATABASE_URL
+        fromDatabase:
+          name: chatgpt_bot_db
+          property: connectionString
 
 databases:
   - name: chatgpt_bot_db
