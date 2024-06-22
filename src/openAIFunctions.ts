@@ -5,7 +5,7 @@ import pTimeout from 'p-timeout';
 import { toLogFormat } from './utils/utils';
 import { encodeText, decodeTokens } from './utils/encodingUtils';
 import { CHAT_GPT_DEFAULT_TIMEOUT_MS, GPT_MODEL, MAX_TOKENS_THRESHOLD_TO_REDUCE_HISTORY, DEFAULT_PROMPT_MESSAGE } from './config';
-import { getUserUsedTokens, insertUserOrUpdate, selectUserByUserId } from './database/database';
+import { getUserUsedTokens, insertUserOrUpdate, getUserByUserId } from './database/database';
 import { MAX_TRIAL_TOKENS, OPENAI_API_KEY } from './config';
 
 export const APPROX_IMAGE_TOKENS = 800;
@@ -35,7 +35,7 @@ if (DEFAULT_PROMPT_MESSAGE) {
 export async function getUserSettingsAndOpenAi(ctx: MyContext): Promise<UserData> {
   if (ctx.from && ctx.from.id) {
     const user_id = ctx.from.id;
-    let userSettings = await selectUserByUserId(user_id);
+    let userSettings = await getUserByUserId(user_id);
     if (!userSettings) {
       // If the user is not found, create new settings
       userSettings = {

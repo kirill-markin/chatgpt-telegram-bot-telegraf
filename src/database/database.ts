@@ -72,7 +72,7 @@ export const getAndConvertMessagesByChatId = async (ctx: MyContext): Promise<MyM
   return convertMessages(messages);
 }
 
-export const selectUserByUserId = async (user_id: number) => {
+export const getUserByUserId = async (user_id: number) => {
   const res = await pool.query('SELECT * FROM users WHERE user_id = $1', [user_id]);
   return res.rows[0];
 }
