@@ -1,5 +1,5 @@
 import { Command } from 'commander';
-import { addOrUpdateUser, getUserByUserId, getAllPremiumUsers } from './database/database';
+import { updateUserForce, getUserByUserId, getAllPremiumUsers } from './database/database';
 import { pool } from './database/database';
 
 const program = new Command();
@@ -12,7 +12,7 @@ program
       const user = await getUserByUserId(Number(userId));
       if (user) {
         user.usage_type = 'premium';
-        await addOrUpdateUser(user);
+        await updateUserForce(user);
         console.log(`User ${userId} is now set as PREMIUM.`);
       } else {
         console.log(`User with ID ${userId} not found.`);
@@ -32,7 +32,7 @@ program
       const user = await getUserByUserId(Number(userId));
       if (user) {
         user.usage_type = null;
-        await addOrUpdateUser(user);
+        await updateUserForce(user);
         console.log(`User ${userId} is no longer PREMIUM.`);
       } else {
         console.log(`User with ID ${userId} not found.`);
