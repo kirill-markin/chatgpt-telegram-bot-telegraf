@@ -24,7 +24,7 @@ export async function convertImageToBase64(filePath: string): Promise<string> {
   return fileBuffer.toString('base64');
 }
 
-export async function resizeImage(inputPath: string, outputPath: string, maxWidth: number, maxHeight: number): Promise<sharp.OutputInfo> {
+export async function resizeImageFile(inputPath: string, outputPath: string, maxWidth: number, maxHeight: number): Promise<sharp.OutputInfo> {
   return sharp(inputPath)
     .resize(maxWidth, maxHeight, {
       fit: sharp.fit.inside,

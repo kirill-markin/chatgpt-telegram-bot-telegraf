@@ -25,7 +25,7 @@ import {
   createCompletionWithRetriesAndMemory, 
   transcribeAudioWithRetries 
 } from './openAIFunctions';
-import { convertAudioToMp3, convertImageToBase64, resizeImage } from './utils/fileUtils';
+import { convertAudioToMp3, convertImageToBase64, resizeImageFile } from './utils/fileUtils';
 
 async function handleUserMessageAndReply(
   ctx: MyContext, 
@@ -226,7 +226,7 @@ export async function handlePhotoMessage(ctx: MyContext, pineconeIndex: any) {
     });
 
     // Resize the image
-    await resizeImage(inputFilePath, resizedFilePath, 1024, 1024);
+    await resizeImageFile(inputFilePath, resizedFilePath, 1024, 1024);
     console.log(formatLogMessage(ctx, `photo resized to 1024x1024 max as ${resizedFilePath}`));
 
     // Encode the image to base64
