@@ -9,12 +9,7 @@ services:
         from: TELEGRAM_BOT_TOKEN
       - key: OPENAI_API_KEY
         from: OPENAI_API_KEY
-    databases:
-      - name: postgres
-        plan: free
-  
+
 databases:
-  - name: postgres
+  - name: chatgpt_bot_db
     plan: free
-    properties:
-      defaultDatabaseName: chatgpt_bot_db
