@@ -1,19 +1,19 @@
 import { Telegraf } from "telegraf";
 import { MyContext } from './types';
-import { TELEGRAM_BOT_TOKEN, timeoutMsDefaultchatGPT } from './config';
-import { initializeDatabase } from './databaseInit';
-import { setupBotHandlers } from './botHandlers';
+import { TELEGRAM_BOT_TOKEN, CHAT_GPT_DEFAULT_TIMEOUT_MS } from './config';
+import { setupDatabase } from './database/databaseInit';
+import { initializeBotHandlers } from './botHandlers';
 
-let bot: Telegraf | undefined;
+let bot: Telegraf<MyContext> | undefined;
 
 // Telegram bot
-bot = new Telegraf<MyContext>(TELEGRAM_BOT_TOKEN, { handlerTimeout: timeoutMsDefaultchatGPT * 6 });
+bot = new Telegraf<MyContext>(TELEGRAM_BOT_TOKEN, { handlerTimeout: CHAT_GPT_DEFAULT_TIMEOUT_MS * 6 });
 
 bot.telegram.getMe().then((botInfo) => {
-  bot!.options.username = botInfo.username;
+  bot!.context.botUsername = botInfo.username; // Store the bot username in context
 });
 
-const waitAndLog = async (stopSignal: any, func: any) => {
+const waitForAndLog = async (stopSignal: any, func: any) => {
   while (!stopSignal()) {
     await new Promise(resolve => setTimeout(resolve, 2000));
     try {
@@ -43,7 +43,7 @@ bot.use(async (ctx: MyContext, next) => {
     sendChatActionTyping = async () => {
       try {
         await ctx.telegram.sendChatAction(chatId, 'typing');
-      } catch (error) {
+      } catch (error: Error | any) {
         if (error.response && error.response.error_code === 403) {
           console.log(`User ${chatId} has blocked the bot.`);
         } else {
@@ -53,13 +53,13 @@ bot.use(async (ctx: MyContext, next) => {
     };
   }
 
-  const waitPromise = waitAndLog(stopSignal, sendChatActionTyping);
+  const waitPromise = waitForAndLog(stopSignal, sendChatActionTyping);
 
   // Wait for next() to complete
   await next();
   isNextDone = true;
 
-  // Wait for waitAndLog to finish
+  // Wait for waitForAndLog to finish
   await waitPromise;
 
   const ms = new Date().getTime() - start.getTime();
@@ -67,10 +67,10 @@ bot.use(async (ctx: MyContext, next) => {
 });
 
 // Attach handlers
-setupBotHandlers(bot);
+initializeBotHandlers(bot);
 
 const startBot = async () => {
-  await initializeDatabase();
+  await setupDatabase();
   console.log('Database initialization complete. Starting bot...');
 
   bot!.launch();

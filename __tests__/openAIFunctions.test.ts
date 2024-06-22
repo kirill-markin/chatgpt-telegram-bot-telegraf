@@ -1,4 +1,4 @@
-import { reduceHistoryWithTokenLimit, calculateTotalTokens, APROX_IMG_TOKENS } from '../src/openAIFunctions';
+import { truncateHistoryToTokenLimit, countTotalTokens, APPROX_IMAGE_TOKENS } from '../src/openAIFunctions';
 import { MyContext, MyMessage } from '../src/types';
 
 // Mock data
@@ -64,35 +64,35 @@ const mockCtx: Partial<MyContext> = {
   }
 };
 
-describe('reduceHistoryWithTokenLimit', () => {
+describe('truncateHistoryToTokenLimit', () => {
   it('should reduce history to fit within token limit', () => {
     const maxTokens = 0;
-    const reducedMessages = reduceHistoryWithTokenLimit(mockCtx as MyContext, mockMessages, maxTokens);
+    const reducedMessages = truncateHistoryToTokenLimit(mockCtx as MyContext, mockMessages, maxTokens);
 
     // Validate the length of the reduced messages
-    const totalTokens = calculateTotalTokens(reducedMessages);
+    const totalTokens = countTotalTokens(reducedMessages);
     expect(totalTokens).toBeLessThanOrEqual(maxTokens);
   });
 
   it('should return an empty array if maxTokens is 0', () => {
     const maxTokens = 0;
-    const reducedMessages = reduceHistoryWithTokenLimit(mockCtx as MyContext, mockMessages, maxTokens);
+    const reducedMessages = truncateHistoryToTokenLimit(mockCtx as MyContext, mockMessages, maxTokens);
 
     expect(reducedMessages).toEqual([]);
   });
 });
 
-describe('calculateTotalTokens', () => {
+describe('countTotalTokens', () => {
   it('should correctly calculate the total number of tokens', () => {
-    const totalTokens = calculateTotalTokens(mockMessages);
+    const totalTokens = countTotalTokens(mockMessages);
     
     // Assuming some hypothetical token counts for the messages
-    const expectedTokens = 54 + APROX_IMG_TOKENS; // Replace this with the actual expected token count
+    const expectedTokens = 54 + APPROX_IMAGE_TOKENS; // Replace this with the actual expected token count
     expect(totalTokens).toEqual(expectedTokens);
   });
 
   it('should return 0 for an empty array', () => {
-    const totalTokens = calculateTotalTokens([]);
+    const totalTokens = countTotalTokens([]);
     expect(totalTokens).toEqual(0);
   });
 });

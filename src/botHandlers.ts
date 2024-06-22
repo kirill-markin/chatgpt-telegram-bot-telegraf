@@ -2,87 +2,88 @@ import { Telegraf } from "telegraf";
 import { message } from "telegraf/filters";
 import { MyContext, User } from './types';
 import { 
-  insertUserOrUpdate, 
-  deactivateMessagesByChatId,
-  insertEventSimple,
-  saveCommandToDB,
-} from './database';
+  addOrUpdateUser, 
+  disableMessagesByChatId,
+  addSimpleEvent,
+  storeCommand,
+} from './database/database';
 import {
   RESET_MESSAGE,
   NO_VIDEO_ERROR,
-  helpString,
+  HELP_MESSAGE,
 } from './config';
 import { 
-  processMessage, 
-  processVoiceMessage, 
-  processAudioFile, 
-  processPhotoMessage 
+  handleMessage, 
+  handleVoiceMessage, 
+  handleAudioFile, 
+  handlePhotoMessage 
 } from './messageHandlers';
-import { toLogFormat, getMessageBufferKey } from './utils';
+import { formatLogMessage } from './utils/utils';
+import { generateMessageBufferKey } from './utils/messageUtils';
 import { pineconeIndex } from './vectorDatabase';
 
 // Create a map to store the message buffers
 const messageBuffers = new Map();
 
-export function setupBotHandlers(bot: Telegraf<MyContext>) {
+export function initializeBotHandlers(bot: Telegraf<MyContext>) {
 
   bot.start(async (ctx: MyContext) => {
-    console.log(toLogFormat(ctx, 'start command received'));
+    console.log(formatLogMessage(ctx, 'start command received'));
     if (ctx.from && ctx.from.id) {
-      await insertUserOrUpdate({
+      await addOrUpdateUser({
         user_id: ctx.from.id,
         username: ctx.from?.username || null,
         default_language_code: ctx.from.language_code,
         language_code: ctx.from.language_code,
       } as User);
-      console.log(toLogFormat(ctx, 'user saved to the database'));
+      console.log(formatLogMessage(ctx, 'user saved to the database'));
     } else {
       throw new Error('ctx.from.id is undefined');
     }
-    ctx.reply(helpString);
+    ctx.reply(HELP_MESSAGE);
   });
 
   bot.help((ctx: MyContext) => {
-    ctx.reply(helpString);
+    ctx.reply(HELP_MESSAGE);
   });
 
   bot.command('reset', (ctx: MyContext) => {
-    console.log(toLogFormat(ctx, `/reset command received`));
+    console.log(formatLogMessage(ctx, `/reset command received`));
     if (ctx.chat && ctx.chat.id) {
-      deactivateMessagesByChatId(ctx.chat.id);
+      disableMessagesByChatId(ctx.chat.id);
     } else {
       throw new Error(`ctx.chat.id is undefined`);
     }
-    console.log(toLogFormat(ctx, `messages deleted from database`));
+    console.log(formatLogMessage(ctx, `messages deleted from database`));
     ctx.reply(RESET_MESSAGE);
-    saveCommandToDB(ctx, 'reset');
+    storeCommand(ctx, 'reset');
   });
 
   bot.on(message('photo'), async (ctx: MyContext) => {
-    console.log(toLogFormat(ctx, `photo received`));
-    await processPhotoMessage(ctx, pineconeIndex);
+    console.log(formatLogMessage(ctx, `photo received`));
+    await handlePhotoMessage(ctx, pineconeIndex);
   });
 
   bot.on(message('video'), (ctx: MyContext) => {
-    console.log(toLogFormat(ctx, `video received`));
+    console.log(formatLogMessage(ctx, `video received`));
     ctx.reply(NO_VIDEO_ERROR);
-    insertEventSimple(ctx, 'user_message', 'user', 'video');
+    addSimpleEvent(ctx, 'user_message', 'user', 'video');
   });
 
   bot.on(message('sticker'), (ctx: MyContext) => {
-    console.log(toLogFormat(ctx, `sticker received`));
+    console.log(formatLogMessage(ctx, `sticker received`));
     ctx.reply('👍');
-    insertEventSimple(ctx, 'user_message', 'user', 'sticker');
+    addSimpleEvent(ctx, 'user_message', 'user', 'sticker');
   });
 
   bot.on(message('voice'), async (ctx: MyContext) => {
-    console.log(toLogFormat(ctx, `[NEW] voice received`));
-    processVoiceMessage(ctx, pineconeIndex);
+    console.log(formatLogMessage(ctx, `[NEW] voice received`));
+    handleVoiceMessage(ctx, pineconeIndex);
   });
 
   bot.on(message('text'), async (ctx: MyContext) => {
-    console.log(toLogFormat(ctx, '[NEW] text received'));
-    const key = getMessageBufferKey(ctx);
+    console.log(formatLogMessage(ctx, '[NEW] text received'));
+    const key = generateMessageBufferKey(ctx);
     const messageData = messageBuffers.get(key) || { messages: [], timer: null };
 
     messageData.messages.push(ctx.message?.text || '');
@@ -96,10 +97,10 @@ export function setupBotHandlers(bot: Telegraf<MyContext>) {
     messageData.timer = setTimeout(async () => {
       // '<|endoftext|>' is a special token that marks the end of a text in OpenAI's and prohibited in the messages
       const fullMessage = messageData.messages?.join('\n').replace(/<\|endoftext\|>/g, '[__openai_token_endoftext__]') || '';
-      console.log(toLogFormat(ctx, `full message collected. length: ${fullMessage.length}`));
+      console.log(formatLogMessage(ctx, `full message collected. length: ${fullMessage.length}`));
       messageData.messages = []; // Clear the messages array
 
-      await processMessage(ctx, fullMessage, 'user_message', 'text', pineconeIndex);
+      await handleMessage(ctx, fullMessage, 'user_message', 'text', pineconeIndex);
     }, 4000);
 
     // Save the message buffer
@@ -113,14 +114,14 @@ export function setupBotHandlers(bot: Telegraf<MyContext>) {
 
     if (fileId && mimeType) {
       if (mimeType.startsWith('audio/')) {
-        await processAudioFile(ctx, fileId, mimeType, pineconeIndex);
+        await handleAudioFile(ctx, fileId, mimeType, pineconeIndex);
       } else {
-        console.log(toLogFormat(ctx, `File received: ${fileName} (${mimeType})`));
+        console.log(formatLogMessage(ctx, `File received: ${fileName} (${mimeType})`));
         // ctx.reply(`Received file: ${fileName} with MIME type: ${mimeType}`);
         ctx.reply('I can only process audio files and compresed photos for now.');
       }
     } else {
-      console.error(toLogFormat(ctx, 'Received file, but file_id or mimeType is undefined'));
+      console.error(formatLogMessage(ctx, 'Received file, but file_id or mimeType is undefined'));
     }
   });
 
@@ -129,9 +130,9 @@ export function setupBotHandlers(bot: Telegraf<MyContext>) {
     const mimeType = ctx.message.audio?.mime_type;
 
     if (fileId && mimeType) {
-      await processAudioFile(ctx, fileId, mimeType, pineconeIndex);
+      await handleAudioFile(ctx, fileId, mimeType, pineconeIndex);
     } else {
-      console.error(toLogFormat(ctx, 'Received audio file, but file_id or mimeType is undefined'));
+      console.error(formatLogMessage(ctx, 'Received audio file, but file_id or mimeType is undefined'));
     }
   });
 

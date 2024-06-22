@@ -1,7 +1,7 @@
 import { Pool } from 'pg';
-import { MyContext, MyMessage, MyMessageContent, User, Event, UserData } from './types';
-import { toLogFormat } from './utils';
-import { DATABASE_URL, NO_ANSWER_ERROR } from './config';
+import { MyContext, MyMessage, MyMessageContent, User, Event, UserData } from '../types';
+import { formatLogMessage } from '../utils/utils';
+import { DATABASE_URL, NO_ANSWER_ERROR } from '../config';
 
 if (typeof DATABASE_URL !== 'string') {
   throw new Error('DATABASE_URL is not defined');
@@ -14,12 +14,12 @@ const pool = new Pool({
 });
 export { pool }; 
 
-export const usedTokensForUser = async (user_id: number): Promise<number> => {
+export const getUserUsedTokens = async (user_id: number): Promise<number> => {
   const res = await pool.query('SELECT SUM(usage_total_tokens) FROM events WHERE user_id = $1', [user_id]);
   return res.rows[0].sum || 0;
 };
 
-const selectMessagesByChatId = async (ctx: MyContext): Promise<MyMessage[]> => {
+const getMessagesByChatId = async (ctx: MyContext): Promise<MyMessage[]> => {
   if (ctx.chat && ctx.chat.id) {
     const res = await pool.query(`
       SELECT role, content 
@@ -29,14 +29,14 @@ const selectMessagesByChatId = async (ctx: MyContext): Promise<MyMessage[]> => {
         AND time >= NOW() - INTERVAL '16 hours' 
       ORDER BY id
     `, [ctx.chat.id]);
-    console.log(toLogFormat(ctx, `messages received from the database: ${res.rows.length}`));
+    console.log(formatLogMessage(ctx, `messages received from the database: ${res.rows.length}`));
     return res.rows as MyMessage[];
   } else {
     throw new Error('ctx.chat.id is undefined');
   }
 }
 
-const transformMessages = (messages: MyMessage[]): MyMessage[] => {
+const convertMessages = (messages: MyMessage[]): MyMessage[] => {
   return messages.map(message => {
     let newContent: MyMessageContent[] = [];
 
@@ -67,17 +67,17 @@ const transformMessages = (messages: MyMessage[]): MyMessage[] => {
   });
 }
 
-export const selectAndTransformMessagesByChatId = async (ctx: MyContext): Promise<MyMessage[]> => {
-  const messages = await selectMessagesByChatId(ctx);
-  return transformMessages(messages);
+export const getAndConvertMessagesByChatId = async (ctx: MyContext): Promise<MyMessage[]> => {
+  const messages = await getMessagesByChatId(ctx);
+  return convertMessages(messages);
 }
 
-export const selectUserByUserId = async (user_id: number) => {
+export const getUserByUserId = async (user_id: number) => {
   const res = await pool.query('SELECT * FROM users WHERE user_id = $1', [user_id]);
   return res.rows[0];
 }
 
-export const insertMessage = async ({role, content, chat_id, user_id}: MyMessage) => {
+export const addMessage = async ({role, content, chat_id, user_id}: MyMessage) => {
   const res = await pool.query(`
     INSERT INTO messages (role, content, chat_id, time, user_id)
     VALUES ($1, $2, $3, CURRENT_TIMESTAMP, (SELECT id FROM users WHERE user_id = $4))
@@ -86,7 +86,7 @@ export const insertMessage = async ({role, content, chat_id, user_id}: MyMessage
   return res.rows[0];
 }
 
-export const insertUserOrUpdate = async ({user_id, username, default_language_code, language_code=default_language_code, openai_api_key=null, usage_type=null}: User) => {
+export const addOrUpdateUser = async ({user_id, username, default_language_code, language_code=default_language_code, openai_api_key=null, usage_type=null}: User) => {
   try {
     const res = await pool.query(`
     INSERT INTO users (user_id, username, default_language_code, language_code, openai_api_key, usage_type, created_at)
@@ -106,7 +106,7 @@ export const insertUserOrUpdate = async ({user_id, username, default_language_co
   }
 }
   
-export const insertEvent = async (event: Event) => {
+export const addEvent = async (event: Event) => {
   event.time = new Date();
   try {
     const res = await pool.query(`
@@ -174,21 +174,21 @@ export const insertEvent = async (event: Event) => {
   }
 }
 
-export const deleteMessagesByChatId = async (chat_id: number) => {
+export const removeMessagesByChatId = async (chat_id: number) => {
   const res = await pool.query('DELETE FROM messages WHERE chat_id = $1', [chat_id]);
   return res;
 }
 
-export const deactivateMessagesByChatId = async (chat_id: number) => {
+export const disableMessagesByChatId = async (chat_id: number) => {
   const res = await pool.query('UPDATE messages SET is_active = FALSE WHERE chat_id = $1', [chat_id]);
   return res;
 }
 
-export async function saveAnswerToDB(chatResponse: any, ctx: MyContext, userData: UserData) {
+export async function storeAnswer(chatResponse: any, ctx: MyContext, userData: UserData) {
   try {
     const answer = chatResponse.choices?.[0]?.message?.content || NO_ANSWER_ERROR;
     if (ctx.chat && ctx.chat.id) {
-      insertMessage({
+      addMessage({
         role: "assistant",
         content: answer,
         chat_id: ctx.chat.id,
@@ -197,7 +197,7 @@ export async function saveAnswerToDB(chatResponse: any, ctx: MyContext, userData
     } else {
       throw new Error(`ctx.chat.id is undefined`);
     }
-    insertEvent({
+    addEvent({
       type: 'assistant_message',
       user_id: ctx.from?.id || null,
       user_is_bot: ctx.from?.is_bot || null,
@@ -217,15 +217,15 @@ export async function saveAnswerToDB(chatResponse: any, ctx: MyContext, userData
       usage_total_tokens: chatResponse.usage?.total_tokens || null,
       api_key: userData.openai.apiKey || null,
     } as Event);
-    console.log(toLogFormat(ctx, `answer saved to the database. total_tokens for this answer: ${chatResponse.usage?.total_tokens || null}`));
+    console.log(formatLogMessage(ctx, `answer saved to the database. total_tokens for this answer: ${chatResponse.usage?.total_tokens || null}`));
   } catch (error) {
-    console.log(toLogFormat(ctx, `[ERROR] error in saving the answer to the database: ${error}`));
+    console.log(formatLogMessage(ctx, `[ERROR] error in saving the answer to the database: ${error}`));
   }
 }
 
-export async function saveCommandToDB(ctx: MyContext, command: string) {
+export async function storeCommand(ctx: MyContext, command: string) {
   try {
-    insertEvent({
+    addEvent({
       type: 'user_command',
       user_id: ctx.from?.id || null,
       user_is_bot: ctx.from?.is_bot || null,
@@ -245,16 +245,16 @@ export async function saveCommandToDB(ctx: MyContext, command: string) {
       usage_total_tokens: null,
       api_key: null,
     } as Event);
-    console.log(toLogFormat(ctx, `${command} saved to the database`));
+    console.log(formatLogMessage(ctx, `${command} saved to the database`));
   } catch (error) {
-    console.log(toLogFormat(ctx, `[ERROR] error in saving the command to the database: ${error}`));
+    console.log(formatLogMessage(ctx, `[ERROR] error in saving the command to the database: ${error}`));
   }
 }
 
-// insertEvent Simple with only type, message_role, messages_type and this is it
-export async function insertEventSimple(ctx: MyContext, type: string, message_role: string, messages_type: string) {
+// addEvent Simple with only type, message_role, messages_type and this is it
+export async function addSimpleEvent(ctx: MyContext, type: string, message_role: string, messages_type: string) {
   try {
-    insertEvent({
+    addEvent({
       type: type,
       user_id: ctx.from?.id || null,
       user_is_bot: ctx.from?.is_bot || null,
@@ -274,15 +274,15 @@ export async function insertEventSimple(ctx: MyContext, type: string, message_ro
       usage_total_tokens: null,
       api_key: null,
     } as Event);
-    console.log(toLogFormat(ctx, `${message_role} saved to the database`));
+    console.log(formatLogMessage(ctx, `${message_role} saved to the database`));
   } catch (error) {
-    console.log(toLogFormat(ctx, `[ERROR] error in saving the ${message_role} to the database: ${error}`));
+    console.log(formatLogMessage(ctx, `[ERROR] error in saving the ${message_role} to the database: ${error}`));
   }
 }
 
-export async function insertEventViaMessageType(ctx: MyContext, eventType: string, messageType: string, messageContent: string) {
+export async function addEventByMessageType(ctx: MyContext, eventType: string, messageType: string, messageContent: string) {
   try {
-    insertEvent({
+    addEvent({
       type: eventType,
       user_id: ctx.from?.id || null,
       user_is_bot: ctx.from?.is_bot || null,
@@ -303,15 +303,15 @@ export async function insertEventViaMessageType(ctx: MyContext, eventType: strin
       usage_total_tokens: null,
       api_key: null,
     } as Event);
-    console.log(toLogFormat(ctx, `${messageType} saved to the database`));
+    console.log(formatLogMessage(ctx, `${messageType} saved to the database`));
   } catch (error) {
-    console.log(toLogFormat(ctx, `[ERROR] error in saving the ${messageType} to the database: ${error}`));
+    console.log(formatLogMessage(ctx, `[ERROR] error in saving the ${messageType} to the database: ${error}`));
   }
 }
 
-export async function insertModelTranscriptionEvent(ctx: MyContext, transcriptionText: string, userData: UserData) {
+export async function addTranscriptionEvent(ctx: MyContext, transcriptionText: string, userData: UserData) {
   try {
-    insertEvent({
+    addEvent({
       type: 'model_transcription',
 
       user_id: ctx.from?.id || null,
@@ -335,8 +335,8 @@ export async function insertModelTranscriptionEvent(ctx: MyContext, transcriptio
       usage_total_tokens: null,
       api_key: userData.openai.apiKey || null,
     } as Event);
-    console.log(toLogFormat(ctx, `model_transcription saved to the database`));
+    console.log(formatLogMessage(ctx, `model_transcription saved to the database`));
   } catch (error) {
-    console.log(toLogFormat(ctx, `[ERROR] error in saving the model_transcription to the database: ${error}`));
+    console.log(formatLogMessage(ctx, `[ERROR] error in saving the model_transcription to the database: ${error}`));
   }
 }

@@ -2,28 +2,32 @@ import fs from "fs";
 import axios from "axios";
 import { MyContext, MyMessage } from "./types";
 import { UserData } from "./types";
-import { errorString } from './config';
+import { ERROR_MESSAGE } from './config';
 import { 
-  toLogFormat, 
-  handleResponseSending,
-  getUserDataOrReplyWithError,
-  sendLongMessage,
-  processAndTruncateMessages,
-} from "./utils";
+  formatLogMessage, 
+  fetchUserDataOrReplyWithError,
+} from "./utils/utils";
+import {
+  truncateMessages,
+} from "./utils/messageUtils";
 import { 
-  saveAnswerToDB, 
-  insertModelTranscriptionEvent, 
-  insertEventViaMessageType, 
-  selectAndTransformMessagesByChatId, 
-  insertMessage 
-} from "./database";
+  sendResponse,
+  sendSplitMessage,
+} from "./utils/responseUtils";
 import { 
-  createChatCompletionWithRetryReduceHistoryLongtermMemory, 
-  createTranscriptionWithRetry 
+  storeAnswer, 
+  addTranscriptionEvent, 
+  addEventByMessageType, 
+  getAndConvertMessagesByChatId, 
+  addMessage 
+} from "./database/database";
+import { 
+  createCompletionWithRetriesAndMemory, 
+  transcribeAudioWithRetries 
 } from './openAIFunctions';
-import { convertToMp3, encodeImageToBase64, resizeImage } from './fileUtils';
+import { convertAudioToMp3, convertImageToBase64, resizeImageFile } from './utils/fileUtils';
 
-async function processUserMessageAndRespond(
+async function handleUserMessageAndReply(
   ctx: MyContext, 
   messageContent: string, 
   userData: UserData, 
@@ -31,7 +35,7 @@ async function processUserMessageAndRespond(
 ) {
   // Save the user message to the database
   if (ctx.chat && ctx.chat.id) {
-    await insertMessage({
+    await addMessage({
       role: "user",
       content: messageContent,
       chat_id: ctx.chat.id,
@@ -42,54 +46,58 @@ async function processUserMessageAndRespond(
   }
 
   // Load all related messages from the database
-  let messages: MyMessage[] = await selectAndTransformMessagesByChatId(ctx);
+  let messages: MyMessage[] = await getAndConvertMessagesByChatId(ctx);
 
+  const truncatedMessages = truncateMessages(messages);
   // DEBUG: messages to console in a pretty format JSON with newlines
-  // const truncatedMessages = processAndTruncateMessages(messages);
   // console.log(JSON.stringify(truncatedMessages, null, 2));
 
   // Send these messages to OpenAI's Chat GPT model
-  const chatResponse: any = await createChatCompletionWithRetryReduceHistoryLongtermMemory(
+  const chatResponse: any = await createCompletionWithRetriesAndMemory(
     ctx,
     messages,
     userData.openai,
     pineconeIndex,
   );
-  console.log(toLogFormat(ctx, `chatGPT response received`));
+  console.log(formatLogMessage(ctx, `chatGPT response received`));
 
   // Save the response tothe database
-  saveAnswerToDB(chatResponse, ctx, userData);
+  storeAnswer(chatResponse, ctx, userData);
 
   // Send the response to the user
-  await handleResponseSending(ctx, chatResponse);
+  await sendResponse(ctx, chatResponse);
 
   return chatResponse;
 }
 
-export async function processMessage(ctx: MyContext, messageContent: string, eventType: string, messageType: string, pineconeIndex: any) {
-  console.log(toLogFormat(ctx, `new ${messageType} message received`));
+export async function handleMessage(ctx: MyContext, messageContent: string, eventType: string, messageType: string, pineconeIndex: any) {
+  console.log(formatLogMessage(ctx, `new ${messageType} message received`));
   
   try {
-    const userData = await getUserDataOrReplyWithError(ctx);
+    const userData = await fetchUserDataOrReplyWithError(ctx);
     if (!userData) return;
-    insertEventViaMessageType(ctx, eventType, messageType, messageContent);
-    console.log(toLogFormat(ctx, `new ${messageType} message saved to the events table`));
+    addEventByMessageType(ctx, eventType, messageType, messageContent);
+    console.log(formatLogMessage(ctx, `new ${messageType} message saved to the events table`));
 
-    await processUserMessageAndRespond(ctx, messageContent, userData, pineconeIndex);
+    await handleUserMessageAndReply(ctx, messageContent, userData, pineconeIndex);
 
   } catch (e) {
-    console.error(toLogFormat(ctx, `[ERROR] error occurred: ${e}`));
-    ctx.reply(errorString);
+    console.error(formatLogMessage(ctx, `[ERROR] error occurred: ${e}`));
+    ctx.reply(ERROR_MESSAGE);
   }
 }
 
-async function processAudioCore(ctx: MyContext, fileId: string, mimeType: string | null) {
-  const userData = await getUserDataOrReplyWithError(ctx);
+async function handleAudioFileCore(ctx: MyContext, fileId: string, mimeType: string | null) {
+  const userData = await fetchUserDataOrReplyWithError(ctx);
   if (!userData) return null;
 
   // Determine file extension
   const extension = mimeType ? mimeType.split('/')[1].replace('x-', '') : 'oga'; // Default to 'oga' if mimeType is null
-  const inputFilePath = `./${fileId}.${extension}`;
+  
+  if (!fs.existsSync('./temp')) {
+    fs.mkdirSync('./temp');
+  }
+  const inputFilePath = `./temp/${fileId}.${extension}`;
 
   // Download the file
   const url = await ctx.telegram.getFileLink(fileId);
@@ -99,7 +107,7 @@ async function processAudioCore(ctx: MyContext, fileId: string, mimeType: string
       .on('error', reject)
       .on('finish', resolve);
   });
-  console.log(toLogFormat(ctx, `audio file downloaded as ${inputFilePath}`));
+  console.log(formatLogMessage(ctx, `audio file downloaded as ${inputFilePath}`));
 
   // Check if file exists
   if (!fs.existsSync(inputFilePath)) {
@@ -109,9 +117,9 @@ async function processAudioCore(ctx: MyContext, fileId: string, mimeType: string
   // Convert the file to mp3 if necessary
   let mp3FilePath = inputFilePath;
   if (mimeType !== 'audio/mp3') {
-    mp3FilePath = `./${fileId}.mp3`;
-    await convertToMp3(inputFilePath, mp3FilePath);
-    console.log(toLogFormat(ctx, `audio file converted to mp3 as ${mp3FilePath}`));
+    mp3FilePath = `./temp/${fileId}.mp3`;
+    await convertAudioToMp3(inputFilePath, mp3FilePath);
+    console.log(formatLogMessage(ctx, `audio file converted to mp3 as ${mp3FilePath}`));
   }
 
   // Check if mp3 file exists
@@ -120,49 +128,51 @@ async function processAudioCore(ctx: MyContext, fileId: string, mimeType: string
   }
 
   // Send the file to the OpenAI API for transcription
-  const transcription = await createTranscriptionWithRetry(fs.createReadStream(mp3FilePath), userData.openai);
+  // @ts-ignore
+  const transcription = await transcribeAudioWithRetries(fs.createReadStream(mp3FilePath), userData.openai);
   const transcriptionText = transcription.text;
-  console.log(toLogFormat(ctx, "audio transcription received"));
+  console.log(formatLogMessage(ctx, "audio transcription received"));
 
   // Clean up files
   fs.unlink(inputFilePath, (err) => { if (err) console.error(err); });
   if (inputFilePath !== mp3FilePath) {
     fs.unlink(mp3FilePath, (err) => { if (err) console.error(err); });
   }
-  console.log(toLogFormat(ctx, "audio processing finished"));
+  console.log(formatLogMessage(ctx, "audio processing finished"));
 
   return { transcriptionText, userData };
 }
   
-export async function processVoiceMessage(ctx: MyContext, pineconeIndex: any) {
+export async function handleVoiceMessage(ctx: MyContext, pineconeIndex: any) {
   try {
+    // @ts-ignore
     const fileId = ctx.message?.voice?.file_id || null;
     if (!fileId) {
       throw new Error("ctx.message.voice.file_id is undefined");
     }
 
-    const result = await processAudioCore(ctx, fileId, null);
+    const result = await handleAudioFileCore(ctx, fileId, null);
     // mimeType is null for voice messages
     if (!result) return;
 
     const { transcriptionText, userData } = result;
 
     // Save the transcription event to the database
-    insertModelTranscriptionEvent(ctx, transcriptionText, userData);
-    console.log(toLogFormat(ctx, `new voice transcription saved to the database`));
+    addTranscriptionEvent(ctx, transcriptionText, userData);
+    console.log(formatLogMessage(ctx, `new voice transcription saved to the database`));
 
     // Process the transcribed message
-    await processMessage(ctx, transcriptionText, 'user_message', 'voice', pineconeIndex);
+    await handleMessage(ctx, transcriptionText, 'user_message', 'voice', pineconeIndex);
 
   } catch (e) {
-    console.error(toLogFormat(ctx, `[ERROR] error occurred: ${e}`));
-    ctx.reply(errorString);
+    console.error(formatLogMessage(ctx, `[ERROR] error occurred: ${e}`));
+    ctx.reply(ERROR_MESSAGE);
   }
 }
 
-export async function processAudioFile(ctx: MyContext, fileId: string, mimeType: string, pineconeIndex: any) {
+export async function handleAudioFile(ctx: MyContext, fileId: string, mimeType: string, pineconeIndex: any) {
   try {
-    const result = await processAudioCore(ctx, fileId, mimeType);
+    const result = await handleAudioFileCore(ctx, fileId, mimeType);
     if (!result) return;
 
     const { transcriptionText, userData } = result;
@@ -171,32 +181,33 @@ export async function processAudioFile(ctx: MyContext, fileId: string, mimeType:
     const formattedTranscriptionText = `You sent an audio file. Transcription of this audio file:\n\n\`\`\`\n${transcriptionText}\n\`\`\`\n`;
 
     // Save the transcription event to the database
-    insertModelTranscriptionEvent(ctx, transcriptionText, userData);
-    console.log(toLogFormat(ctx, `new audio transcription saved to the database`));
+    addTranscriptionEvent(ctx, transcriptionText, userData);
+    console.log(formatLogMessage(ctx, `new audio transcription saved to the database`));
 
     // Save the formatted transcription text to the messages table
     if (ctx.chat && ctx.chat.id) {
-      await insertMessage({
+      await addMessage({
         role: "assistant",
         content: formattedTranscriptionText,
         chat_id: ctx.chat.id,
         user_id: null,
       });
-      console.log(toLogFormat(ctx, "formatted transcription text saved to the messages table"));
+      console.log(formatLogMessage(ctx, "formatted transcription text saved to the messages table"));
     } else {
       throw new Error(`ctx.chat.id is undefined`);
     }
 
     // Reply with the formatted transcription text
-    await sendLongMessage(ctx, formattedTranscriptionText);
+    await sendSplitMessage(ctx, formattedTranscriptionText);
 
   } catch (e) {
-    console.error(toLogFormat(ctx, `[ERROR] error occurred: ${e}`));
-    ctx.reply(errorString);
+    console.error(formatLogMessage(ctx, `[ERROR] error occurred: ${e}`));
+    ctx.reply(ERROR_MESSAGE);
   }
 }
 
-export async function processPhotoMessage(ctx: MyContext, pineconeIndex: any) {
+export async function handlePhotoMessage(ctx: MyContext, pineconeIndex: any) {
+  // @ts-ignore
   const photo = ctx.message.photo[ctx.message.photo.length - 1]; // Get the highest resolution photo
   const fileId = photo.file_id;
 
@@ -215,11 +226,11 @@ export async function processPhotoMessage(ctx: MyContext, pineconeIndex: any) {
     });
 
     // Resize the image
-    await resizeImage(inputFilePath, resizedFilePath, 1024, 1024);
-    console.log(toLogFormat(ctx, `photo resized to 1024x1024 max as ${resizedFilePath}`));
+    await resizeImageFile(inputFilePath, resizedFilePath, 1024, 1024);
+    console.log(formatLogMessage(ctx, `photo resized to 1024x1024 max as ${resizedFilePath}`));
 
     // Encode the image to base64
-    const base64Image = await encodeImageToBase64(resizedFilePath);
+    const base64Image = await convertImageToBase64(resizedFilePath);
     const base64Content = `data:image/jpeg;base64,${base64Image}`;
 
     // Delete the temporary files
@@ -231,12 +242,12 @@ export async function processPhotoMessage(ctx: MyContext, pineconeIndex: any) {
     });
 
     // Send the message to OpenAI
-    const userData = await getUserDataOrReplyWithError(ctx);
+    const userData = await fetchUserDataOrReplyWithError(ctx);
     if (!userData) return;
-    await processMessage(ctx, base64Content, 'user_message', 'photo', pineconeIndex);
+    await handleMessage(ctx, base64Content, 'user_message', 'photo', pineconeIndex);
 
   } catch (error) {
-    console.error(toLogFormat(ctx, `[ERROR] error occurred: ${error}`));
-    ctx.reply(errorString);
+    console.error(formatLogMessage(ctx, `[ERROR] error occurred: ${error}`));
+    ctx.reply(ERROR_MESSAGE);
   }
 }

@@ -1,0 +1,35 @@
+import { MyContext } from '../types';
+import { 
+  TRIAL_ENDED_ERROR,
+ } from '../config';
+import { 
+  getUserSettingsAndOpenAi,
+} from '../openAIFunctions';
+import { UserData } from '../types';
+
+class NoOpenAiApiKeyError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'NoOpenAiApiKeyError';
+  }
+}
+
+export const formatLogMessage = (ctx: MyContext, logMessage: string) => {
+  const chat_id = ctx.chat?.id;
+  const username = ctx.from?.username || ctx.from?.id;
+  return `Chat: ${chat_id}, User: ${username}: ${logMessage}`;
+}
+
+export async function fetchUserDataOrReplyWithError(ctx: MyContext): Promise<UserData | null> {
+  try {
+    const userData = await getUserSettingsAndOpenAi(ctx);
+    return userData;
+  } catch (e) {
+    if (e instanceof NoOpenAiApiKeyError) {
+      await ctx.reply(TRIAL_ENDED_ERROR);
+      return null;
+    } else {
+      throw e;
+    }
+  }
+}
