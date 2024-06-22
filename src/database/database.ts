@@ -67,7 +67,7 @@ const convertMessages = (messages: MyMessage[]): MyMessage[] => {
   });
 }
 
-export const selectAndTransformMessagesByChatId = async (ctx: MyContext): Promise<MyMessage[]> => {
+export const getAndConvertMessagesByChatId = async (ctx: MyContext): Promise<MyMessage[]> => {
   const messages = await getMessagesByChatId(ctx);
   return convertMessages(messages);
 }

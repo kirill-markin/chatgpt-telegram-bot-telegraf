@@ -18,7 +18,7 @@ import {
   saveAnswerToDB, 
   insertModelTranscriptionEvent, 
   insertEventViaMessageType, 
-  selectAndTransformMessagesByChatId, 
+  getAndConvertMessagesByChatId, 
   insertMessage 
 } from "./database/database";
 import { 
@@ -46,7 +46,7 @@ async function handleUserMessageAndReply(
   }
 
   // Load all related messages from the database
-  let messages: MyMessage[] = await selectAndTransformMessagesByChatId(ctx);
+  let messages: MyMessage[] = await getAndConvertMessagesByChatId(ctx);
 
   const truncatedMessages = processAndTruncateMessages(messages);
   // DEBUG: messages to console in a pretty format JSON with newlines
