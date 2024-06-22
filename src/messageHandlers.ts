@@ -87,7 +87,7 @@ export async function handleMessage(ctx: MyContext, messageContent: string, even
   }
 }
 
-async function processAudioCore(ctx: MyContext, fileId: string, mimeType: string | null) {
+async function handleAudioFileCore(ctx: MyContext, fileId: string, mimeType: string | null) {
   const userData = await getUserDataOrReplyWithError(ctx);
   if (!userData) return null;
 
@@ -151,7 +151,7 @@ export async function processVoiceMessage(ctx: MyContext, pineconeIndex: any) {
       throw new Error("ctx.message.voice.file_id is undefined");
     }
 
-    const result = await processAudioCore(ctx, fileId, null);
+    const result = await handleAudioFileCore(ctx, fileId, null);
     // mimeType is null for voice messages
     if (!result) return;
 
@@ -172,7 +172,7 @@ export async function processVoiceMessage(ctx: MyContext, pineconeIndex: any) {
 
 export async function processAudioFile(ctx: MyContext, fileId: string, mimeType: string, pineconeIndex: any) {
   try {
-    const result = await processAudioCore(ctx, fileId, mimeType);
+    const result = await handleAudioFileCore(ctx, fileId, mimeType);
     if (!result) return;
 
     const { transcriptionText, userData } = result;
