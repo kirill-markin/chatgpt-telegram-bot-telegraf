@@ -1,7 +1,7 @@
 import { MyContext, MyMessage } from '../types';
 import { truncateText } from './encodingUtils';
 
-export const getMessageBufferKey = (ctx: MyContext) => {
+export const generateMessageBufferKey = (ctx: MyContext) => {
   if (ctx.chat && ctx.from) {
     return `${ctx.chat.id}:${ctx.from.id}`;
   } else {

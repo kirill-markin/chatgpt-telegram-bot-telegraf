@@ -19,7 +19,7 @@ import {
   handlePhotoMessage 
 } from './messageHandlers';
 import { formatLogMessage } from './utils/utils';
-import { getMessageBufferKey } from './utils/messageUtils';
+import { generateMessageBufferKey } from './utils/messageUtils';
 import { pineconeIndex } from './vectorDatabase';
 
 // Create a map to store the message buffers
@@ -83,7 +83,7 @@ export function initializeBotHandlers(bot: Telegraf<MyContext>) {
 
   bot.on(message('text'), async (ctx: MyContext) => {
     console.log(formatLogMessage(ctx, '[NEW] text received'));
-    const key = getMessageBufferKey(ctx);
+    const key = generateMessageBufferKey(ctx);
     const messageData = messageBuffers.get(key) || { messages: [], timer: null };
 
     messageData.messages.push(ctx.message?.text || '');
