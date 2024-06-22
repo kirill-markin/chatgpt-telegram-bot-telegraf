@@ -184,7 +184,7 @@ export const disableMessagesByChatId = async (chat_id: number) => {
   return res;
 }
 
-export async function saveAnswerToDB(chatResponse: any, ctx: MyContext, userData: UserData) {
+export async function storeAnswer(chatResponse: any, ctx: MyContext, userData: UserData) {
   try {
     const answer = chatResponse.choices?.[0]?.message?.content || NO_ANSWER_ERROR;
     if (ctx.chat && ctx.chat.id) {

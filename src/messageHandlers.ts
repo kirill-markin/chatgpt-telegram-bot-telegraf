@@ -15,7 +15,7 @@ import {
   sendLongMessage,
 } from "./utils/responseUtils";
 import { 
-  saveAnswerToDB, 
+  storeAnswer, 
   insertModelTranscriptionEvent, 
   insertEventViaMessageType, 
   getAndConvertMessagesByChatId, 
@@ -62,7 +62,7 @@ async function handleUserMessageAndReply(
   console.log(toLogFormat(ctx, `chatGPT response received`));
 
   // Save the response tothe database
-  saveAnswerToDB(chatResponse, ctx, userData);
+  storeAnswer(chatResponse, ctx, userData);
 
   // Send the response to the user
   await handleResponseSending(ctx, chatResponse);
