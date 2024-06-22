@@ -2,7 +2,7 @@ import fs from "fs";
 import axios from "axios";
 import { MyContext, MyMessage } from "./types";
 import { UserData } from "./types";
-import { errorString } from './config';
+import { ERROR_MESSAGE } from './config';
 import { 
   toLogFormat, 
   getUserDataOrReplyWithError,
@@ -83,7 +83,7 @@ export async function processMessage(ctx: MyContext, messageContent: string, eve
 
   } catch (e) {
     console.error(toLogFormat(ctx, `[ERROR] error occurred: ${e}`));
-    ctx.reply(errorString);
+    ctx.reply(ERROR_MESSAGE);
   }
 }
 
@@ -166,7 +166,7 @@ export async function processVoiceMessage(ctx: MyContext, pineconeIndex: any) {
 
   } catch (e) {
     console.error(toLogFormat(ctx, `[ERROR] error occurred: ${e}`));
-    ctx.reply(errorString);
+    ctx.reply(ERROR_MESSAGE);
   }
 }
 
@@ -202,7 +202,7 @@ export async function processAudioFile(ctx: MyContext, fileId: string, mimeType:
 
   } catch (e) {
     console.error(toLogFormat(ctx, `[ERROR] error occurred: ${e}`));
-    ctx.reply(errorString);
+    ctx.reply(ERROR_MESSAGE);
   }
 }
 
@@ -248,6 +248,6 @@ export async function processPhotoMessage(ctx: MyContext, pineconeIndex: any) {
 
   } catch (error) {
     console.error(toLogFormat(ctx, `[ERROR] error occurred: ${error}`));
-    ctx.reply(errorString);
+    ctx.reply(ERROR_MESSAGE);
   }
 }

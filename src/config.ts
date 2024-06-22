@@ -37,7 +37,7 @@ export const NO_VIDEO_ERROR = bot_settings.strings.no_video_error || 'Bot can no
 export const NO_ANSWER_ERROR = bot_settings.strings.no_answer_error || 'Bot can not answer to this message.';
 export const MAX_TRIAL_TOKENS = bot_settings.max_trials_tokens || 200_000;
 export const HELP_MESSAGE = bot_settings.strings.help_string;
-export const errorString = bot_settings.strings.error_string;
+export const ERROR_MESSAGE = bot_settings.strings.error_string;
 export const botSettings = bot_settings;
 export const CHAT_GPT_DEFAULT_TIMEOUT_MS = 6*60*1000;
 export const defaultPrompt: Prompt | undefined = botSettings.prompts.find((prompt: Prompt) => prompt.name === 'default');
