@@ -19,7 +19,7 @@ export const getUserUsedTokens = async (user_id: number): Promise<number> => {
   return res.rows[0].sum || 0;
 };
 
-const selectMessagesByChatId = async (ctx: MyContext): Promise<MyMessage[]> => {
+const getMessagesByChatId = async (ctx: MyContext): Promise<MyMessage[]> => {
   if (ctx.chat && ctx.chat.id) {
     const res = await pool.query(`
       SELECT role, content 
@@ -68,7 +68,7 @@ const transformMessages = (messages: MyMessage[]): MyMessage[] => {
 }
 
 export const selectAndTransformMessagesByChatId = async (ctx: MyContext): Promise<MyMessage[]> => {
-  const messages = await selectMessagesByChatId(ctx);
+  const messages = await getMessagesByChatId(ctx);
   return transformMessages(messages);
 }
 
