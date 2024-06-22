@@ -77,7 +77,7 @@ export const getUserByUserId = async (user_id: number) => {
   return res.rows[0];
 }
 
-export const insertMessage = async ({role, content, chat_id, user_id}: MyMessage) => {
+export const addMessage = async ({role, content, chat_id, user_id}: MyMessage) => {
   const res = await pool.query(`
     INSERT INTO messages (role, content, chat_id, time, user_id)
     VALUES ($1, $2, $3, CURRENT_TIMESTAMP, (SELECT id FROM users WHERE user_id = $4))
@@ -188,7 +188,7 @@ export async function saveAnswerToDB(chatResponse: any, ctx: MyContext, userData
   try {
     const answer = chatResponse.choices?.[0]?.message?.content || NO_ANSWER_ERROR;
     if (ctx.chat && ctx.chat.id) {
-      insertMessage({
+      addMessage({
         role: "assistant",
         content: answer,
         chat_id: ctx.chat.id,

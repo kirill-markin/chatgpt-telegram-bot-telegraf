@@ -19,7 +19,7 @@ import {
   insertModelTranscriptionEvent, 
   insertEventViaMessageType, 
   getAndConvertMessagesByChatId, 
-  insertMessage 
+  addMessage 
 } from "./database/database";
 import { 
   createCompletionWithRetriesAndMemory, 
@@ -35,7 +35,7 @@ async function handleUserMessageAndReply(
 ) {
   // Save the user message to the database
   if (ctx.chat && ctx.chat.id) {
-    await insertMessage({
+    await addMessage({
       role: "user",
       content: messageContent,
       chat_id: ctx.chat.id,
@@ -186,7 +186,7 @@ export async function handleAudioFile(ctx: MyContext, fileId: string, mimeType: 
 
     // Save the formatted transcription text to the messages table
     if (ctx.chat && ctx.chat.id) {
-      await insertMessage({
+      await addMessage({
         role: "assistant",
         content: formattedTranscriptionText,
         chat_id: ctx.chat.id,
