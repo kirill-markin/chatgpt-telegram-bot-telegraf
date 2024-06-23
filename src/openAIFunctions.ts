@@ -11,13 +11,6 @@ import { truncateMessages } from "./utils/messageUtils";
 
 export const APPROX_IMAGE_TOKENS = 800;
 
-class NoOpenAiApiKeyError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'NoOpenAiApiKeyError';
-  }
-}
-
 // default prompt message to add to the GPT model
 
 let defaultPromptMessageObj = {} as MyMessage;
@@ -34,55 +27,60 @@ if (DEFAULT_PROMPT_MESSAGE) {
 // OpenAI functions
 
 export async function getUserSettingsAndOpenAi(ctx: MyContext): Promise<UserData> {
-  if (ctx.from && ctx.from.id) {
-    const user_id = ctx.from.id;
-    let userSettings = await getUserByUserId(user_id);
-    if (!userSettings) {
-      // If the user is not found, create new settings
-      userSettings = {
-        user_id: user_id,
-        username: ctx.from?.username || null,
-        default_language_code: ctx.from?.language_code || null,
-        language_code: ctx.from?.language_code || null,
-      };
-      await upsertUserIfNotExists(userSettings); // Insert the new user
-      console.log(formatLogMessage(ctx, "User created in the database"));
-    } else {
-      // If the user is found, update their data
-      userSettings.username = ctx.from?.username || userSettings.username;
-      userSettings.default_language_code = ctx.from?.language_code || userSettings.default_language_code;
-      userSettings.language_code = ctx.from?.language_code || userSettings.language_code;
-      await upsertUserIfNotExists(userSettings); // Update the user's data
-      console.log(formatLogMessage(ctx, "User data updated in the database"));
-    }
-
-    // Check if user has openai_api_key or is premium
-    if (userSettings.openai_api_key) { // custom api key
-      console.log(formatLogMessage(ctx, `[ACCESS GRANTED] user has custom openai_api_key.`));
-    } else if (userSettings.usage_type === 'premium') { // premium user
-      userSettings.openai_api_key = OPENAI_API_KEY;
-      console.log(formatLogMessage(ctx, `[ACCESS GRANTED] user is premium but has no custom openai_api_key. openai_api_key set from environment variable.`));
-    } else { // no access or trial
-      const usedTokens = await getUserUsedTokens(user_id);
-      if (usedTokens < MAX_TRIAL_TOKENS) {
-        userSettings.usage_type = 'trial_active';
-        await upsertUserIfNotExists(userSettings);
-        userSettings.openai_api_key = OPENAI_API_KEY;
-        console.log(formatLogMessage(ctx, `[ACCESS GRANTED] user is trial and user did not exceed the message limit. User used tokens: ${usedTokens} out of ${MAX_TRIAL_TOKENS}. openai_api_key set from environment variable.`));
+  try {
+    if (ctx.from && ctx.from.id) {
+      const user_id = ctx.from.id;
+      let userSettings = await getUserByUserId(user_id);
+      if (!userSettings) {
+        // If the user is not found, create new settings
+        userSettings = {
+          user_id: user_id,
+          username: ctx.from?.username || null,
+          default_language_code: ctx.from?.language_code || null,
+          language_code: ctx.from?.language_code || null,
+        };
+        await upsertUserIfNotExists(userSettings); // Insert the new user
+        console.log(formatLogMessage(ctx, "User created in the database"));
       } else {
-        userSettings.usage_type = 'trial_ended';
-        await upsertUserIfNotExists(userSettings);
-        console.log(formatLogMessage(ctx, `[ACCESS DENIED] user is not premium and has no custom openai_api_key and exceeded the message limit. User used tokens: ${usedTokens} out of ${MAX_TRIAL_TOKENS}.`));
-        throw new NoOpenAiApiKeyError(`User with user_id ${user_id} has no openai_api_key`);
+        // If the user is found, update their data
+        userSettings.username = ctx.from?.username || userSettings.username;
+        userSettings.default_language_code = ctx.from?.language_code || userSettings.default_language_code;
+        userSettings.language_code = ctx.from?.language_code || userSettings.language_code;
+        await upsertUserIfNotExists(userSettings); // Update the user's data
+        console.log(formatLogMessage(ctx, "User data updated in the database"));
       }
-    }
 
-    const openai = new OpenAI({
-      apiKey: userSettings.openai_api_key,
-    });
-    return {settings: userSettings, openai: openai}
-  } else {
-    throw new Error('ctx.from.id is undefined');
+      let openai: OpenAI | null = new OpenAI({
+        apiKey: userSettings.openai_api_key,
+      });
+      
+      // Check if user has openai_api_key or is premium
+      if (userSettings.openai_api_key) { // custom api key
+        console.log(formatLogMessage(ctx, `[ACCESS GRANTED] user has custom openai_api_key.`));
+      } else if (userSettings.usage_type === 'premium') { // premium user
+        userSettings.openai_api_key = OPENAI_API_KEY;
+        console.log(formatLogMessage(ctx, `[ACCESS GRANTED] user is premium but has no custom openai_api_key. openai_api_key set from environment variable.`));
+      } else { // no access or trial
+        const usedTokens = await getUserUsedTokens(user_id);
+        if (usedTokens < MAX_TRIAL_TOKENS) {
+          userSettings.usage_type = 'trial_active';
+          await upsertUserIfNotExists(userSettings);
+          userSettings.openai_api_key = OPENAI_API_KEY;
+          console.log(formatLogMessage(ctx, `[ACCESS GRANTED] user is trial and user did not exceed the message limit. User used tokens: ${usedTokens} out of ${MAX_TRIAL_TOKENS}. openai_api_key set from environment variable.`));
+        } else {
+          userSettings.usage_type = 'trial_ended';
+          await upsertUserIfNotExists(userSettings);
+          console.warn(formatLogMessage(ctx, `[ACCESS DENIED] user is not premium and has no custom openai_api_key and exceeded the message limit. User used tokens: ${usedTokens} out of ${MAX_TRIAL_TOKENS}.`));
+          openai = null;
+        }
+      }
+
+      return {settings: userSettings, openai: openai}
+    } else {
+      throw new Error('ctx.from.id is undefined');
+    }
+  } catch (error) {
+    throw error;
   }
 }
 

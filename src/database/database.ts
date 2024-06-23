@@ -205,6 +205,9 @@ export const disableMessagesByChatId = async (chat_id: number) => {
 
 export async function storeAnswer(chatResponse: any, ctx: MyContext, userData: UserData) {
   try {
+    if (!userData.openai) {
+      throw new Error('openai is not defined in userData');
+    }
     const answer = chatResponse.choices?.[0]?.message?.content || NO_ANSWER_ERROR;
     if (ctx.chat && ctx.chat.id) {
       addMessage({
@@ -330,6 +333,9 @@ export async function addEventByMessageType(ctx: MyContext, eventType: string, m
 
 export async function addTranscriptionEvent(ctx: MyContext, transcriptionText: string, userData: UserData) {
   try {
+    if (!userData.openai) {
+      throw new Error('openai is not defined in userData');
+    }
     addEvent({
       type: 'model_transcription',
 
@@ -369,3 +375,25 @@ export const getAllPremiumUsers = async () => {
   `, ['premium']);
   return res.rows;
 };
+
+export const addMessagesBatch = async (messages: MyMessage[]) => {
+  const query = `
+    INSERT INTO messages (role, content, chat_id, time, user_id)
+    VALUES ${messages.map((_, i) => `($${4 * i + 1}, $${4 * i + 2}, $${4 * i + 3}, CURRENT_TIMESTAMP, (SELECT id FROM users WHERE user_id = $${4 * i + 4}))`).join(',')}
+    RETURNING *;
+  `;
+
+  const values = messages.flatMap(({ role, content, chat_id, user_id }) => {
+    if (typeof content !== 'string') {
+      throw new Error('Content must be a string');
+    }
+    return [role, content, chat_id, user_id];
+  });
+
+  try {
+    const res = await pool.query(query, values);
+    return res.rows;
+  } catch (error) {
+    throw error;
+  }
+}
