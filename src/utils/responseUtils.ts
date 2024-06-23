@@ -44,8 +44,12 @@ export async function sendTypingActionPeriodically(ctx: MyContext, intervalMs: n
 
   const sendTyping = async () => {
     while (isTyping) {
-      // @ts-ignore
-      await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
+      try {
+        // @ts-ignore
+        await ctx.telegram.sendChatAction(ctx.chat.id, 'typing');
+      } catch (e) {
+        console.error(formatLogMessage(ctx, `[ERROR] error in sending the typing action to the user: ${e}`));
+      }
       await new Promise(resolve => setTimeout(resolve, intervalMs));
     }
   };
