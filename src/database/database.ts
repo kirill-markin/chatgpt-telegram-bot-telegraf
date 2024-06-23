@@ -369,3 +369,25 @@ export const getAllPremiumUsers = async () => {
   `, ['premium']);
   return res.rows;
 };
+
+export const addMessagesBatch = async (messages: MyMessage[]) => {
+  const query = `
+    INSERT INTO messages (role, content, chat_id, time, user_id)
+    VALUES ${messages.map((_, i) => `($${4 * i + 1}, $${4 * i + 2}, $${4 * i + 3}, CURRENT_TIMESTAMP, (SELECT id FROM users WHERE user_id = $${4 * i + 4}))`).join(',')}
+    RETURNING *;
+  `;
+
+  const values = messages.flatMap(({ role, content, chat_id, user_id }) => {
+    if (typeof content !== 'string') {
+      throw new Error('Content must be a string');
+    }
+    return [role, content, chat_id, user_id];
+  });
+
+  try {
+    const res = await pool.query(query, values);
+    return res.rows;
+  } catch (error) {
+    throw error;
+  }
+}

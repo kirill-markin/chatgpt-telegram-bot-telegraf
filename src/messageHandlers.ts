@@ -14,11 +14,9 @@ import {
 } from "./utils/responseUtils";
 import { 
   storeAnswer, 
-  addTranscriptionEvent, 
-  addEventByMessageType, 
   getAndConvertMessagesByChatId, 
-  addMessage,
   addSimpleEvent,
+  addMessagesBatch,
 } from "./database/database";
 import { 
   createCompletionWithRetriesAndMemory, 
@@ -28,49 +26,82 @@ import { convertAudioToMp3, convertImageToBase64, resizeImageFile } from './util
 import { generateMessageBufferKey } from './utils/messageUtils';
 import { pineconeIndex } from './vectorDatabase';
 import { TRIAL_ENDED_ERROR } from './config';
+import e from "express";
 
 
-// Create a map to store the message buffers
-const messageBuffers = new Map();
+// Temporary message buffer
+const messageBuffers = new Map<string, { messages: MyMessage[], timer: NodeJS.Timeout | null }>();
+
+export async function saveMessagesToDatabase(ctx: MyContext, messages: MyMessage[]) {
+  console.log(formatLogMessage(ctx, `Saving ${messages.length} messages to the database`));
+
+  // TODO: Add event for each message to the database
+
+  try {
+    await addMessagesBatch(messages);
+    console.log(formatLogMessage(ctx, `Messages saved to the database`));
+  } catch (error) {
+    console.error(formatLogMessage(ctx, `[ERROR] error in saving messages to the database: ${error}`));
+  }
+}
 
 export async function handleAnyMessage(ctx: MyContext, messageType: string) {
   console.log(formatLogMessage(ctx, `[NEW] ${messageType} received`));
 
   try {
-    const userData : UserData = await fetchUserDataOrReplyWithError(ctx);
-    
     const key = generateMessageBufferKey(ctx);
     const messageData = messageBuffers.get(key) || { messages: [], timer: null };
 
+    const userId = ctx.from?.id;
+    const chatId = ctx.chat?.id;
+    if (userId !== undefined && userId !== null && chatId !== undefined && chatId !== null) {
+      messageData.messages.push({ role: 'user', content: messageType, chat_id: chatId, user_id: userId });
+    } else {
+      throw new Error('userId or chatId is undefined');
+    }
+
     if (messageType === 'voice') {
-      await handleVoiceMessage(ctx, userData);
+      const transcriptionText = await handleVoiceMessage(ctx);
+      messageData.messages.push({ role: 'user', content: transcriptionText, chat_id: chatId, user_id: userId });
     } else if (messageType === 'audio') {
       // @ts-ignore
-      const fileId = ctx.message.audio?.file_id;
+      const fileId = ctx.message?.audio?.file_id;
       // @ts-ignore
-      const mimeType = ctx.message.audio?.mime_type;
+      const mimeType = ctx.message?.audio?.mime_type;
 
       if (fileId && mimeType) {
-        await handleAudioFile(ctx, userData, fileId, mimeType);
+        const transcriptionText = await handleAudioFile(ctx, fileId, mimeType);
+        messageData.messages.push({ role: 'user', content: transcriptionText, chat_id: chatId, user_id: userId });
       } else {
-        console.error(formatLogMessage(ctx, 'Received audio file, but file_id or mimeType is undefined'));
+        throw new Error('fileId or mimeType is undefined');
       }
     } else if (messageType === 'photo') {
-      await handlePhotoMessage(ctx);
+      const base64Content = await handlePhotoMessage(ctx);
+      messageData.messages.push({ role: 'user', content: base64Content, chat_id: chatId, user_id: userId });
+      // @ts-ignore
+      const caption = ctx.message?.caption;
+      if (caption) {
+        messageData.messages.push({ role: 'user', content: caption, chat_id: chatId, user_id: userId });
+      }
     } else if (messageType === 'text') {
       // @ts-ignore
-      await saveMessageToDatabase(ctx, ctx.message?.text, 'text');
+      const text = ctx.message?.text;
+      if (!text) {
+        throw new Error('ctx.message.text is undefined');
+      }
+      messageData.messages.push({ role: 'user', content: text, chat_id: chatId, user_id: userId });
     } else if (messageType === 'document') {
       // @ts-ignore
-      const fileId = ctx.message.document?.file_id;
+      const fileId = ctx.message?.document?.file_id;
       // @ts-ignore
-      const fileName = ctx.message.document?.file_name;
+      const fileName = ctx.message?.document?.file_name;
       // @ts-ignore
-      const mimeType = ctx.message.document?.mime_type;
+      const mimeType = ctx.message?.document?.mime_type;
 
       if (fileId && mimeType) {
         if (mimeType.startsWith('audio/')) {
-          await handleAudioFile(ctx, userData, fileId, mimeType);
+          const transcriptionText = await handleAudioFile(ctx, fileId, mimeType);
+          messageData.messages.push({ role: 'user', content: transcriptionText, chat_id: chatId, user_id: userId });
         } else {
           console.log(formatLogMessage(ctx, `File received: ${fileName} (${mimeType})`));
           ctx.reply('I can only process audio files and compressed photos for now.');
@@ -97,11 +128,14 @@ export async function handleAnyMessage(ctx: MyContext, messageType: string) {
 
     // Set a new timer
     messageData.timer = setTimeout(async () => {
-      const messages = await getAndConvertMessagesByChatId(ctx);
-      const fullMessage = messages.map(msg => msg.content).join('\n');
-      console.log(formatLogMessage(ctx, `full message collected. length: ${fullMessage.length}`));
+      const messagesToSave = messageData.messages;
       messageData.messages = []; // Clear the messages array
 
+      // Save all messages to the database at once
+      await saveMessagesToDatabase(ctx, messagesToSave);
+
+      // Process the messages and send a reply
+      const userData: UserData = await fetchUserDataOrReplyWithError(ctx);
       await replyToUser(ctx, userData, pineconeIndex);
     }, 4000);
 
@@ -112,6 +146,8 @@ export async function handleAnyMessage(ctx: MyContext, messageType: string) {
       await ctx.reply(TRIAL_ENDED_ERROR);
       return;
     } else {
+      console.error(formatLogMessage(ctx, `[ERROR] error occurred: ${e}`));
+      ctx.reply(ERROR_MESSAGE);
       throw e;
     }
   }
@@ -144,7 +180,7 @@ export async function replyToUser(ctx: MyContext, userData: UserData, pineconeIn
   }
 }
 
-async function handleAudioFileCore(ctx: MyContext, userData: UserData, fileId: string, mimeType: string | null) : Promise<string> {
+async function handleAudioFileCore(ctx: MyContext, fileId: string, mimeType: string | null) : Promise<string> {
   // Determine file extension
   const extension = mimeType ? mimeType.split('/')[1].replace('x-', '') : 'oga'; // Default to 'oga' if mimeType is null
   
@@ -182,6 +218,7 @@ async function handleAudioFileCore(ctx: MyContext, userData: UserData, fileId: s
   }
 
   // Send the file to the OpenAI API for transcription
+  const userData: UserData = await fetchUserDataOrReplyWithError(ctx);
   // @ts-ignore
   const transcription = await transcribeAudioWithRetries(fs.createReadStream(mp3FilePath), userData.openai);
   const transcriptionText = transcription.text;
@@ -197,133 +234,77 @@ async function handleAudioFileCore(ctx: MyContext, userData: UserData, fileId: s
   return transcriptionText;
 }
 
-export async function handleVoiceMessage(ctx: MyContext, userData: UserData) {
-  try {
-    // @ts-ignore
-    const fileId = ctx.message?.voice?.file_id || null;
-    if (!fileId) {
-      throw new Error("ctx.message.voice.file_id is undefined");
-    }
-    const transcriptionText = await handleAudioFileCore(ctx, userData, fileId, null);
-    // mimeType is null for voice messages
-    if (!transcriptionText) return;
-
-    // Save the transcription event to the database
-    addTranscriptionEvent(ctx, transcriptionText, userData);
-    console.log(formatLogMessage(ctx, `new voice transcription saved to the database`));
-
-    const formattedTranscriptionText = `User sent a voice message. Transcription of this voice message:\n\n${transcriptionText}\n`;
-    // Save the transcription text to the messages table
-    await saveMessageToDatabase(ctx, transcriptionText, 'text');
-
-  } catch (e) {
-    console.error(formatLogMessage(ctx, `[ERROR] error occurred: ${e}`));
-    ctx.reply(ERROR_MESSAGE);
+export async function handleVoiceMessage(ctx: MyContext): Promise<string> {
+  // @ts-ignore
+  const fileId = ctx.message?.voice?.file_id || null;
+  if (!fileId) {
+    throw new Error("ctx.message.voice.file_id is undefined");
   }
+  const transcriptionText = await handleAudioFileCore(ctx, fileId, null);
+  // mimeType is null for voice messages
+  if (!transcriptionText) return "";
+
+  // Save the transcription event to the database
+  // TODO: This is not working, why do we nee userData here?
+  // addTranscriptionEvent(ctx, transcriptionText, userData);
+  console.log(formatLogMessage(ctx, `new voice transcription saved to the database`));
+
+  const formattedTranscriptionText = `User sent a voice message. Transcription of this voice message:\n\n${transcriptionText}\n`;
+  
+  return formattedTranscriptionText;
 }
 
-export async function handleAudioFile(ctx: MyContext, userData: any, fileId: string, mimeType: string): Promise<void> {
-  try {
-    const transcriptionText = await handleAudioFileCore(ctx, userData, fileId, mimeType);
-    if (!transcriptionText) return;
+export async function handleAudioFile(ctx: MyContext, fileId: string, mimeType: string): Promise<string> {
+  const transcriptionText = await handleAudioFileCore(ctx, fileId, mimeType);
+  if (!transcriptionText) return "";
 
-    // Formatted transcription text
-    const formattedTranscriptionText = `You sent an audio file. Transcription of this audio file:\n\n${transcriptionText}\n`;
+  // Formatted transcription text
+  const formattedTranscriptionText = `You sent an audio file. Transcription of this audio file:\n\n${transcriptionText}\n`;
 
-    // Save the transcription event to the database
-    addTranscriptionEvent(ctx, transcriptionText, userData);
-    console.log(formatLogMessage(ctx, `new audio transcription saved to the database`));
+  // Save the transcription event to the database
+  // TODO: This is not working, why do we nee userData here?
+  // addTranscriptionEvent(ctx, transcriptionText, userData);
+  console.log(formatLogMessage(ctx, `new audio transcription saved to the database`));
 
-    // Save the formatted transcription text to the messages table
-    if (ctx.chat && ctx.chat.id) {
-      await addMessage({
-        role: "assistant",
-        content: formattedTranscriptionText,
-        chat_id: ctx.chat.id,
-        user_id: null,
-      });
-      console.log(formatLogMessage(ctx, "formatted transcription text saved to the messages table"));
-    } else {
-      throw new Error(`ctx.chat.id is undefined`);
-    }
+  // Reply with the formatted transcription text
+  await sendSplitMessage(ctx, formattedTranscriptionText);
 
-    // Reply with the formatted transcription text
-    await sendSplitMessage(ctx, formattedTranscriptionText);
-
-  } catch (e) {
-    console.error(formatLogMessage(ctx, `[ERROR] error occurred: ${e}`));
-    ctx.reply(ERROR_MESSAGE);
-  }
+  return formattedTranscriptionText;
 }
 
-export async function handlePhotoMessage(ctx: MyContext) {
+export async function handlePhotoMessage(ctx: MyContext): Promise<string> {
   // @ts-ignore
   const photo = ctx.message.photo[ctx.message.photo.length - 1]; // Get the highest resolution photo
   const fileId = photo.file_id;
 
-  try {
-    const url = await ctx.telegram.getFileLink(fileId);
-    const response = await axios({ url: url.toString(), responseType: 'stream' });
-    if (!fs.existsSync('./temp')) {
-      fs.mkdirSync('./temp');
-    }
-    const inputFilePath = `./temp/${fileId}.jpg`;
-    const resizedFilePath = `./temp/${fileId}_resized.jpg`;
-    await new Promise((resolve, reject) => {
-      response.data.pipe(fs.createWriteStream(inputFilePath))
-        .on('error', reject)
-        .on('finish', resolve);
-    });
-
-    // Resize the image
-    await resizeImageFile(inputFilePath, resizedFilePath, 1024, 1024);
-    console.log(formatLogMessage(ctx, `photo resized to 1024x1024 max as ${resizedFilePath}`));
-
-    // Encode the image to base64
-    const base64Image = await convertImageToBase64(resizedFilePath);
-    const base64Content = `data:image/jpeg;base64,${base64Image}`;
-
-    // Delete the temporary files
-    fs.unlink(inputFilePath, (err) => {
-      if (err) console.error(err);
-    });
-    fs.unlink(resizedFilePath, (err) => {
-      if (err) console.error(err);
-    });
-
-    // Save the photo to the database
-    await saveMessageToDatabase(ctx, base64Content, 'photo');
-
-    // Save caption text to the database if it exists
-    // @ts-ignore
-    if (ctx.message?.caption) {
-      // @ts-ignore
-      await saveMessageToDatabase(ctx, ctx.message.caption, 'text');
-    }
-
-  } catch (error) {
-    console.error(formatLogMessage(ctx, `[ERROR] error occurred: ${error}`));
-    ctx.reply(ERROR_MESSAGE);
+  const url = await ctx.telegram.getFileLink(fileId);
+  const response = await axios({ url: url.toString(), responseType: 'stream' });
+  if (!fs.existsSync('./temp')) {
+    fs.mkdirSync('./temp');
   }
-}
+  const inputFilePath = `./temp/${fileId}.jpg`;
+  const resizedFilePath = `./temp/${fileId}_resized.jpg`;
+  await new Promise((resolve, reject) => {
+    response.data.pipe(fs.createWriteStream(inputFilePath))
+      .on('error', reject)
+      .on('finish', resolve);
+  });
 
-export async function saveMessageToDatabase(ctx: MyContext, messageContent: string, messageType: string) {
-  console.log(formatLogMessage(ctx, `new ${messageType} message received`));
+  // Resize the image
+  await resizeImageFile(inputFilePath, resizedFilePath, 1024, 1024);
+  console.log(formatLogMessage(ctx, `photo resized to 1024x1024 max as ${resizedFilePath}`));
 
-  // Save the message to the events table
-  addEventByMessageType(ctx, 'user_message', messageType, messageContent);
-  console.log(formatLogMessage(ctx, `new ${messageType} message saved to the events table`));
+  // Encode the image to base64
+  const base64Image = await convertImageToBase64(resizedFilePath);
+  const base64Content: string = `data:image/jpeg;base64,${base64Image}`;
 
-  // Save the message to the messages table
-  if (ctx.chat && ctx.chat.id) {
-    await addMessage({
-      role: 'user',
-      content: messageContent,
-      chat_id: ctx.chat.id,
-      user_id: ctx.from?.id || null,
-    });
-    console.log(formatLogMessage(ctx, `${messageType} message saved to the messages table`));
-  } else {
-    throw new Error(`ctx.chat.id is undefined`);
-  }
+  // Delete the temporary files
+  fs.unlink(inputFilePath, (err) => {
+    if (err) console.error(err);
+  });
+  fs.unlink(resizedFilePath, (err) => {
+    if (err) console.error(err);
+  });
+
+  return base64Content;
 }
