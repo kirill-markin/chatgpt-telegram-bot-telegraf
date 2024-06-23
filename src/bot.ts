@@ -4,6 +4,7 @@ import { TELEGRAM_BOT_TOKEN, CHAT_GPT_DEFAULT_TIMEOUT_MS } from './config';
 import { setupDatabase } from './database/databaseInit';
 import { initializeBotHandlers } from './botHandlers';
 import express from "express";
+import axios from 'axios';
 
 let bot: Telegraf<MyContext> | undefined;
 
@@ -13,6 +14,22 @@ bot = new Telegraf<MyContext>(TELEGRAM_BOT_TOKEN, { handlerTimeout: CHAT_GPT_DEF
 bot.telegram.getMe().then((botInfo) => {
   bot!.context.botUsername = botInfo.username; // Store the bot username in context
 });
+
+async function clearPendingUpdates() {
+  try {
+    const response = await axios.get(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getUpdates`);
+    const updateIds = response.data.result.map((update: any) => update.update_id);
+    if (updateIds.length > 0) {
+      const lastUpdateId = Math.max(...updateIds);
+      await axios.get(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getUpdates?offset=${lastUpdateId + 1}`);
+      console.log(`Cleared ${updateIds.length} pending updates.`);
+    } else {
+      console.log('No pending updates to clear.');
+    }
+  } catch (error) {
+    console.error('Failed to clear pending updates:', error);
+  }
+}
 
 bot.use(async (ctx: MyContext, next) => {
   const start = new Date();
@@ -32,6 +49,8 @@ initializeBotHandlers(bot);
 const startBot = async () => {
   await setupDatabase();
   console.log('Database initialization complete. Starting bot...');
+
+  await clearPendingUpdates();
 
   bot!.launch();
   console.log('Bot started');
