@@ -13,11 +13,12 @@ import {
   sendResponse,
   sendSplitMessage,
   sendTypingActionPeriodically,
+  reply,
 } from "./utils/responseUtils";
 import { 
   storeAnswer, 
   getAndConvertMessagesByChatId, 
-  addSimpleEvent,
+  // addSimpleEvent,
   addMessagesBatch,
 } from "./database/database";
 import { 
@@ -103,19 +104,19 @@ export async function handleAnyMessage(ctx: MyContext, messageType: string) {
           messageData.messages.push({ role: 'user', content: transcriptionText, chat_id: chatId, user_id: userId });
         } else {
           console.log(formatLogMessage(ctx, `File received: ${fileName} (${mimeType})`));
-          ctx.reply('I can only process audio files and compressed photos for now.');
+          reply(ctx, 'I can only process audio files and compressed photos for now.', 'unsupported file type');
         }
       } else {
         console.error(formatLogMessage(ctx, 'Received file, but file_id or mimeType is undefined'));
       }
     } else if (messageType === 'video') {
       console.log(formatLogMessage(ctx, `video received`));
-      ctx.reply(NO_VIDEO_ERROR);
-      addSimpleEvent(ctx, 'user_message', 'user', 'video');
+      reply(ctx, NO_VIDEO_ERROR, 'video received');
+      // addSimpleEvent(ctx, 'user_message', 'user', 'video');
     } else if (messageType === 'sticker') {
       console.log(formatLogMessage(ctx, `sticker received`));
-      ctx.reply('👍');
-      addSimpleEvent(ctx, 'user_message', 'user', 'sticker');
+      reply(ctx, '👍', 'sticker received');
+      // addSimpleEvent(ctx, 'user_message', 'user', 'sticker');
     } else {
       throw new Error(`Unsupported message type: ${messageType}`);
     }
@@ -142,18 +143,11 @@ export async function handleAnyMessage(ctx: MyContext, messageType: string) {
         await replyToUser(ctx, userData, pineconeIndex);
       } catch (e) {
         if (e instanceof NoOpenAiApiKeyError) {
-          try {
-            await ctx.reply(TRIAL_ENDED_ERROR);
-          } catch (error) {
-            console.error(formatLogMessage(ctx, `[ERROR] error occurred: ${error}`));
-          }
+          console.warn(formatLogMessage(ctx, `[WARN] error occurred: ${e}`));
+          await reply(ctx, TRIAL_ENDED_ERROR, 'trial ended');
         } else {
           console.error(formatLogMessage(ctx, `[ERROR] error occurred: ${e}`));
-          try {
-            await ctx.reply(ERROR_MESSAGE);
-          } catch (error) {
-            console.error(formatLogMessage(ctx, `[ERROR] error occurred: ${error}`));
-          }
+          await reply(ctx, ERROR_MESSAGE, 'error occurred');
         }
       }
     }, 4000);
@@ -162,14 +156,11 @@ export async function handleAnyMessage(ctx: MyContext, messageType: string) {
     messageBuffers.set(key, messageData);
   } catch (e) {
     if (e instanceof NoOpenAiApiKeyError) {
-      await ctx.reply(TRIAL_ENDED_ERROR);
+      console.warn(formatLogMessage(ctx, `[WARN] error occurred: ${e}`));
+      await reply(ctx, TRIAL_ENDED_ERROR, 'trial ended');
     } else {
       console.error(formatLogMessage(ctx, `[ERROR] error occurred: ${e}`));
-      try {
-        await ctx.reply(ERROR_MESSAGE);
-      } catch (error) {
-        console.error(formatLogMessage(ctx, `[ERROR] error occurred: ${error}`));
-      }
+      await reply(ctx, ERROR_MESSAGE, 'error occurred');
     }
   }
 }

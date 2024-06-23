@@ -12,6 +12,7 @@ import {
 } from './config';
 import { handleAnyMessage } from './messageHandlers';
 import { formatLogMessage } from './utils/utils';
+import { reply } from './utils/responseUtils';
 
 export function initializeBotHandlers(bot: Telegraf<MyContext>) {
 
@@ -28,21 +29,11 @@ export function initializeBotHandlers(bot: Telegraf<MyContext>) {
     } else {
       throw new Error('ctx.from.id is undefined');
     }
-    try {
-      ctx.reply(HELP_MESSAGE);
-      console.log(formatLogMessage(ctx, 'help message sent'));
-    } catch (error) {
-      console.error(error);
-    }
+    reply(ctx, HELP_MESSAGE, 'help message');
   });
 
   bot.help((ctx: MyContext) => {
-    try {
-      ctx.reply(HELP_MESSAGE);
-      console.log(formatLogMessage(ctx, 'help message sent'));
-    } catch (error) {
-      console.error(error);
-    }
+    reply(ctx, HELP_MESSAGE, 'help message');
   });
 
   bot.command('reset', (ctx: MyContext) => {
@@ -53,12 +44,7 @@ export function initializeBotHandlers(bot: Telegraf<MyContext>) {
       throw new Error(`ctx.chat.id is undefined`);
     }
     console.log(formatLogMessage(ctx, `messages deleted from database`));
-    try {
-      ctx.reply(RESET_MESSAGE);
-      console.log(formatLogMessage(ctx, 'reset message sent'));
-    } catch (error) {
-      console.error(error);
-    }
+    reply(ctx, RESET_MESSAGE, 'reset message');
     storeCommand(ctx, 'reset');
   });
 
