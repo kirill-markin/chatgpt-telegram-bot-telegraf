@@ -28,11 +28,21 @@ export function initializeBotHandlers(bot: Telegraf<MyContext>) {
     } else {
       throw new Error('ctx.from.id is undefined');
     }
-    ctx.reply(HELP_MESSAGE);
+    try {
+      ctx.reply(HELP_MESSAGE);
+      console.log(formatLogMessage(ctx, 'help message sent'));
+    } catch (error) {
+      console.error(error);
+    }
   });
 
   bot.help((ctx: MyContext) => {
-    ctx.reply(HELP_MESSAGE);
+    try {
+      ctx.reply(HELP_MESSAGE);
+      console.log(formatLogMessage(ctx, 'help message sent'));
+    } catch (error) {
+      console.error(error);
+    }
   });
 
   bot.command('reset', (ctx: MyContext) => {
@@ -43,7 +53,12 @@ export function initializeBotHandlers(bot: Telegraf<MyContext>) {
       throw new Error(`ctx.chat.id is undefined`);
     }
     console.log(formatLogMessage(ctx, `messages deleted from database`));
-    ctx.reply(RESET_MESSAGE);
+    try {
+      ctx.reply(RESET_MESSAGE);
+      console.log(formatLogMessage(ctx, 'reset message sent'));
+    } catch (error) {
+      console.error(error);
+    }
     storeCommand(ctx, 'reset');
   });
 

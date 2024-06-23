@@ -145,10 +145,18 @@ export async function handleAnyMessage(ctx: MyContext, messageType: string) {
         await replyToUser(ctx, userData, pineconeIndex);
       } catch (e) {
         if (e instanceof NoOpenAiApiKeyError) {
-          await ctx.reply(TRIAL_ENDED_ERROR);
+          try {
+            await ctx.reply(TRIAL_ENDED_ERROR);
+          } catch (error) {
+            console.error(formatLogMessage(ctx, `[ERROR] error occurred: ${error}`));
+          }
         } else {
           console.error(formatLogMessage(ctx, `[ERROR] error occurred: ${e}`));
-          ctx.reply(ERROR_MESSAGE);
+          try {
+            await ctx.reply(ERROR_MESSAGE);
+          } catch (error) {
+            console.error(formatLogMessage(ctx, `[ERROR] error occurred: ${error}`));
+          }
         }
       }
     }, 4000);
@@ -160,7 +168,11 @@ export async function handleAnyMessage(ctx: MyContext, messageType: string) {
       await ctx.reply(TRIAL_ENDED_ERROR);
     } else {
       console.error(formatLogMessage(ctx, `[ERROR] error occurred: ${e}`));
-      ctx.reply(ERROR_MESSAGE);
+      try {
+        await ctx.reply(ERROR_MESSAGE);
+      } catch (error) {
+        console.error(formatLogMessage(ctx, `[ERROR] error occurred: ${error}`));
+      }
     }
   }
 }

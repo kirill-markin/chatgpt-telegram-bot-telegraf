@@ -8,10 +8,18 @@ export async function sendSplitMessage(ctx: MyContext, message: string) {
   if (message.length > MAX_MESSAGE_LENGTH_TELEGRAM) {
     for (let i = 0; i < message.length; i += MAX_MESSAGE_LENGTH_TELEGRAM) {
       const messagePart = message.substring(i, i + MAX_MESSAGE_LENGTH_TELEGRAM);
-      await ctx.reply(messagePart);
+      try {
+        await ctx.reply(messagePart);
+      } catch (e) {
+        console.error(formatLogMessage(ctx, `[ERROR] error in sending the message to the user: ${e}`));
+      }
     }
   } else {
-    await ctx.reply(message);
+    try {
+      await ctx.reply(message);
+    } catch (e) {
+      console.error(formatLogMessage(ctx, `[ERROR] error in sending the message to the user: ${e}`));
+    }
   }
 }
 
