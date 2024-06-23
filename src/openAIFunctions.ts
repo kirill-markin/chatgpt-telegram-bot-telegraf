@@ -50,10 +50,6 @@ export async function getUserSettingsAndOpenAi(ctx: MyContext): Promise<UserData
         console.log(formatLogMessage(ctx, "User data updated in the database"));
       }
 
-      let openai: OpenAI | null = new OpenAI({
-        apiKey: userSettings.openai_api_key,
-      });
-      
       // Check if user has openai_api_key or is premium
       if (userSettings.openai_api_key) { // custom api key
         console.log(formatLogMessage(ctx, `[ACCESS GRANTED] user has custom openai_api_key.`));
@@ -71,10 +67,17 @@ export async function getUserSettingsAndOpenAi(ctx: MyContext): Promise<UserData
           userSettings.usage_type = 'trial_ended';
           await upsertUserIfNotExists(userSettings);
           console.warn(formatLogMessage(ctx, `[ACCESS DENIED] user is not premium and has no custom openai_api_key and exceeded the message limit. User used tokens: ${usedTokens} out of ${MAX_TRIAL_TOKENS}.`));
-          openai = null;
+          userSettings.openai_api_key = null;
         }
       }
 
+      let openai = null;
+      if (userSettings.openai_api_key !== null) {
+        openai = new OpenAI({
+          apiKey: userSettings.openai_api_key,
+        });
+      }
+      
       return {settings: userSettings, openai: openai}
     } else {
       throw new Error('ctx.from.id is undefined');
