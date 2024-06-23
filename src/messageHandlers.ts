@@ -4,8 +4,10 @@ import { MyContext, MyMessage, UserData, NoOpenAiApiKeyError } from "./types";
 import { ERROR_MESSAGE, NO_VIDEO_ERROR } from './config';
 import { 
   formatLogMessage, 
-  fetchUserDataOrReplyWithError,
 } from "./utils/utils";
+import { 
+  getUserSettingsAndOpenAi,
+} from './openAIFunctions';
 import { truncateMessages } from "./utils/messageUtils";
 import { 
   sendResponse,
@@ -128,15 +130,27 @@ export async function handleAnyMessage(ctx: MyContext, messageType: string) {
 
     // Set a new timer
     messageData.timer = setTimeout(async () => {
-      const messagesToSave = messageData.messages;
-      messageData.messages = []; // Clear the messages array
+      try {
+        const messagesToSave = messageData.messages;
+        messageData.messages = []; // Clear the messages array
 
-      // Save all messages to the database at once
-      await saveMessagesToDatabase(ctx, messagesToSave);
+        // Save all messages to the database at once
+        await saveMessagesToDatabase(ctx, messagesToSave);
 
-      // Process the messages and send a reply
-      const userData: UserData = await fetchUserDataOrReplyWithError(ctx);
-      await replyToUser(ctx, userData, pineconeIndex);
+        // Process the messages and send a reply
+        const userData: UserData = await getUserSettingsAndOpenAi(ctx);
+        if (!userData.openai) {
+          throw new NoOpenAiApiKeyError("OpenAI API key is not set");
+        }
+        await replyToUser(ctx, userData, pineconeIndex);
+      } catch (e) {
+        if (e instanceof NoOpenAiApiKeyError) {
+          await ctx.reply(TRIAL_ENDED_ERROR);
+        } else {
+          console.error(formatLogMessage(ctx, `[ERROR] error occurred: ${e}`));
+          ctx.reply(ERROR_MESSAGE);
+        }
+      }
     }, 4000);
 
     // Save the message buffer
@@ -144,11 +158,9 @@ export async function handleAnyMessage(ctx: MyContext, messageType: string) {
   } catch (e) {
     if (e instanceof NoOpenAiApiKeyError) {
       await ctx.reply(TRIAL_ENDED_ERROR);
-      return;
     } else {
       console.error(formatLogMessage(ctx, `[ERROR] error occurred: ${e}`));
       ctx.reply(ERROR_MESSAGE);
-      throw e;
     }
   }
 }
@@ -161,6 +173,9 @@ export async function replyToUser(ctx: MyContext, userData: UserData, pineconeIn
     // DEBUG: messages to console in a pretty format JSON with newlines
     // console.log(`messages: ${JSON.stringify(truncateMessages(messages), null, 2)}`);
 
+    if (!userData.openai) {
+      throw new NoOpenAiApiKeyError("OpenAI API key is not set");
+    }
     const chatResponse: any = await createCompletionWithRetriesAndMemory(
       ctx,
       messages,
@@ -173,65 +188,71 @@ export async function replyToUser(ctx: MyContext, userData: UserData, pineconeIn
 
     return chatResponse;
   } catch (e) {
-    console.error(formatLogMessage(ctx, `[ERROR] error occurred: ${e}`));
-    ctx.reply(ERROR_MESSAGE);
+    throw e;
   } finally {
     stopTyping(); // Stop the typing action
   }
 }
 
 async function handleAudioFileCore(ctx: MyContext, fileId: string, mimeType: string | null) : Promise<string> {
-  // Determine file extension
-  const extension = mimeType ? mimeType.split('/')[1].replace('x-', '') : 'oga'; // Default to 'oga' if mimeType is null
-  
-  if (!fs.existsSync('./temp')) {
-    fs.mkdirSync('./temp');
+  try {
+    // Determine file extension
+    const extension = mimeType ? mimeType.split('/')[1].replace('x-', '') : 'oga'; // Default to 'oga' if mimeType is null
+    
+    if (!fs.existsSync('./temp')) {
+      fs.mkdirSync('./temp');
+    }
+    const inputFilePath = `./temp/${fileId}.${extension}`;
+
+    // Download the file
+    const url = await ctx.telegram.getFileLink(fileId);
+    const response = await axios({ url: url.toString(), responseType: 'stream' });
+    await new Promise((resolve, reject) => {
+      response.data.pipe(fs.createWriteStream(inputFilePath))
+        .on('error', reject)
+        .on('finish', resolve);
+    });
+    console.log(formatLogMessage(ctx, `audio file downloaded as ${inputFilePath}`));
+
+    // Check if file exists
+    if (!fs.existsSync(inputFilePath)) {
+      throw new Error(`File ${inputFilePath} does not exist`);
+    }
+
+    // Convert the file to mp3 if necessary
+    let mp3FilePath = inputFilePath;
+    if (mimeType !== 'audio/mp3') {
+      mp3FilePath = `./temp/${fileId}.mp3`;
+      await convertAudioToMp3(inputFilePath, mp3FilePath);
+      console.log(formatLogMessage(ctx, `audio file converted to mp3 as ${mp3FilePath}`));
+    }
+
+    // Check if mp3 file exists
+    if (!fs.existsSync(mp3FilePath)) {
+      throw new Error(`File ${mp3FilePath} does not exist`);
+    }
+
+    // Send the file to the OpenAI API for transcription
+    const userData: UserData = await getUserSettingsAndOpenAi(ctx);
+    if (!userData.openai) {
+      throw new NoOpenAiApiKeyError("OpenAI API key is not set");
+    }
+    // @ts-ignore
+    const transcription = await transcribeAudioWithRetries(fs.createReadStream(mp3FilePath), userData.openai);
+    const transcriptionText = transcription.text;
+    console.log(formatLogMessage(ctx, "audio transcription received"));
+
+    // Clean up files
+    fs.unlink(inputFilePath, (err) => { if (err) console.error(err); });
+    if (inputFilePath !== mp3FilePath) {
+      fs.unlink(mp3FilePath, (err) => { if (err) console.error(err); });
+    }
+    console.log(formatLogMessage(ctx, "audio processing finished"));
+
+    return transcriptionText;
+  } catch (e) {
+    throw e;
   }
-  const inputFilePath = `./temp/${fileId}.${extension}`;
-
-  // Download the file
-  const url = await ctx.telegram.getFileLink(fileId);
-  const response = await axios({ url: url.toString(), responseType: 'stream' });
-  await new Promise((resolve, reject) => {
-    response.data.pipe(fs.createWriteStream(inputFilePath))
-      .on('error', reject)
-      .on('finish', resolve);
-  });
-  console.log(formatLogMessage(ctx, `audio file downloaded as ${inputFilePath}`));
-
-  // Check if file exists
-  if (!fs.existsSync(inputFilePath)) {
-    throw new Error(`File ${inputFilePath} does not exist`);
-  }
-
-  // Convert the file to mp3 if necessary
-  let mp3FilePath = inputFilePath;
-  if (mimeType !== 'audio/mp3') {
-    mp3FilePath = `./temp/${fileId}.mp3`;
-    await convertAudioToMp3(inputFilePath, mp3FilePath);
-    console.log(formatLogMessage(ctx, `audio file converted to mp3 as ${mp3FilePath}`));
-  }
-
-  // Check if mp3 file exists
-  if (!fs.existsSync(mp3FilePath)) {
-    throw new Error(`File ${mp3FilePath} does not exist`);
-  }
-
-  // Send the file to the OpenAI API for transcription
-  const userData: UserData = await fetchUserDataOrReplyWithError(ctx);
-  // @ts-ignore
-  const transcription = await transcribeAudioWithRetries(fs.createReadStream(mp3FilePath), userData.openai);
-  const transcriptionText = transcription.text;
-  console.log(formatLogMessage(ctx, "audio transcription received"));
-
-  // Clean up files
-  fs.unlink(inputFilePath, (err) => { if (err) console.error(err); });
-  if (inputFilePath !== mp3FilePath) {
-    fs.unlink(mp3FilePath, (err) => { if (err) console.error(err); });
-  }
-  console.log(formatLogMessage(ctx, "audio processing finished"));
-
-  return transcriptionText;
 }
 
 export async function handleVoiceMessage(ctx: MyContext): Promise<string> {
@@ -273,38 +294,42 @@ export async function handleAudioFile(ctx: MyContext, fileId: string, mimeType: 
 }
 
 export async function handlePhotoMessage(ctx: MyContext): Promise<string> {
-  // @ts-ignore
-  const photo = ctx.message.photo[ctx.message.photo.length - 1]; // Get the highest resolution photo
-  const fileId = photo.file_id;
+  try {
+    // @ts-ignore
+    const photo = ctx.message.photo[ctx.message.photo.length - 1]; // Get the highest resolution photo
+    const fileId = photo.file_id;
 
-  const url = await ctx.telegram.getFileLink(fileId);
-  const response = await axios({ url: url.toString(), responseType: 'stream' });
-  if (!fs.existsSync('./temp')) {
-    fs.mkdirSync('./temp');
+    const url = await ctx.telegram.getFileLink(fileId);
+    const response = await axios({ url: url.toString(), responseType: 'stream' });
+    if (!fs.existsSync('./temp')) {
+      fs.mkdirSync('./temp');
+    }
+    const inputFilePath = `./temp/${fileId}.jpg`;
+    const resizedFilePath = `./temp/${fileId}_resized.jpg`;
+    await new Promise((resolve, reject) => {
+      response.data.pipe(fs.createWriteStream(inputFilePath))
+        .on('error', reject)
+        .on('finish', resolve);
+    });
+
+    // Resize the image
+    await resizeImageFile(inputFilePath, resizedFilePath, 1024, 1024);
+    console.log(formatLogMessage(ctx, `photo resized to 1024x1024 max as ${resizedFilePath}`));
+
+    // Encode the image to base64
+    const base64Image = await convertImageToBase64(resizedFilePath);
+    const base64Content: string = `data:image/jpeg;base64,${base64Image}`;
+
+    // Delete the temporary files
+    fs.unlink(inputFilePath, (err) => {
+      if (err) console.error(err);
+    });
+    fs.unlink(resizedFilePath, (err) => {
+      if (err) console.error(err);
+    });
+
+    return base64Content;
+  } catch (e) {
+    throw e;
   }
-  const inputFilePath = `./temp/${fileId}.jpg`;
-  const resizedFilePath = `./temp/${fileId}_resized.jpg`;
-  await new Promise((resolve, reject) => {
-    response.data.pipe(fs.createWriteStream(inputFilePath))
-      .on('error', reject)
-      .on('finish', resolve);
-  });
-
-  // Resize the image
-  await resizeImageFile(inputFilePath, resizedFilePath, 1024, 1024);
-  console.log(formatLogMessage(ctx, `photo resized to 1024x1024 max as ${resizedFilePath}`));
-
-  // Encode the image to base64
-  const base64Image = await convertImageToBase64(resizedFilePath);
-  const base64Content: string = `data:image/jpeg;base64,${base64Image}`;
-
-  // Delete the temporary files
-  fs.unlink(inputFilePath, (err) => {
-    if (err) console.error(err);
-  });
-  fs.unlink(resizedFilePath, (err) => {
-    if (err) console.error(err);
-  });
-
-  return base64Content;
 }

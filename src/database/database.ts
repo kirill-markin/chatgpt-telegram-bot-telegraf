@@ -205,6 +205,9 @@ export const disableMessagesByChatId = async (chat_id: number) => {
 
 export async function storeAnswer(chatResponse: any, ctx: MyContext, userData: UserData) {
   try {
+    if (!userData.openai) {
+      throw new Error('openai is not defined in userData');
+    }
     const answer = chatResponse.choices?.[0]?.message?.content || NO_ANSWER_ERROR;
     if (ctx.chat && ctx.chat.id) {
       addMessage({
@@ -330,6 +333,9 @@ export async function addEventByMessageType(ctx: MyContext, eventType: string, m
 
 export async function addTranscriptionEvent(ctx: MyContext, transcriptionText: string, userData: UserData) {
   try {
+    if (!userData.openai) {
+      throw new Error('openai is not defined in userData');
+    }
     addEvent({
       type: 'model_transcription',
 

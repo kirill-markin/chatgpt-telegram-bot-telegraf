@@ -77,7 +77,7 @@ export interface UserSettings {
 
 export interface UserData {
   settings: UserSettings;
-  openai: OpenAI;
+  openai: OpenAI | null;
 }
 export class NoOpenAiApiKeyError extends Error {
   constructor(message: string) {
