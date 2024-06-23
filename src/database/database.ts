@@ -241,7 +241,7 @@ export async function storeAnswer(chatResponse: any, ctx: MyContext, userData: U
     } as Event);
     console.log(formatLogMessage(ctx, `answer saved to the database. total_tokens for this answer: ${chatResponse.usage?.total_tokens || null}`));
   } catch (error) {
-    console.log(formatLogMessage(ctx, `[ERROR] error in saving the answer to the database: ${error}`));
+    console.error(formatLogMessage(ctx, `[ERROR] error in saving the answer to the database: ${error}`));
   }
 }
 
@@ -269,7 +269,7 @@ export async function storeCommand(ctx: MyContext, command: string) {
     } as Event);
     console.log(formatLogMessage(ctx, `${command} saved to the database`));
   } catch (error) {
-    console.log(formatLogMessage(ctx, `[ERROR] error in saving the command to the database: ${error}`));
+    console.error(formatLogMessage(ctx, `[ERROR] error in saving the command to the database: ${error}`));
   }
 }
 
@@ -298,7 +298,7 @@ export async function addSimpleEvent(ctx: MyContext, type: string, message_role:
     } as Event);
     console.log(formatLogMessage(ctx, `${message_role} saved to the database`));
   } catch (error) {
-    console.log(formatLogMessage(ctx, `[ERROR] error in saving the ${message_role} to the database: ${error}`));
+    console.error(formatLogMessage(ctx, `[ERROR] error in saving the ${message_role} to the database: ${error}`));
   }
 }
 
@@ -327,7 +327,7 @@ export async function addEventByMessageType(ctx: MyContext, eventType: string, m
     } as Event);
     console.log(formatLogMessage(ctx, `${messageType} saved to the database`));
   } catch (error) {
-    console.log(formatLogMessage(ctx, `[ERROR] error in saving the ${messageType} to the database: ${error}`));
+    console.error(formatLogMessage(ctx, `[ERROR] error in saving the ${messageType} to the database: ${error}`));
   }
 }
 
@@ -362,7 +362,7 @@ export async function addTranscriptionEvent(ctx: MyContext, transcriptionText: s
     } as Event);
     console.log(formatLogMessage(ctx, `model_transcription saved to the database`));
   } catch (error) {
-    console.log(formatLogMessage(ctx, `[ERROR] error in saving the model_transcription to the database: ${error}`));
+    console.error(formatLogMessage(ctx, `[ERROR] error in saving the model_transcription to the database: ${error}`));
   }
 }
 

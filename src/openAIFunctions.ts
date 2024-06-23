@@ -66,7 +66,7 @@ export async function getUserSettingsAndOpenAi(ctx: MyContext): Promise<UserData
         } else {
           userSettings.usage_type = 'trial_ended';
           await upsertUserIfNotExists(userSettings);
-          console.warn(formatLogMessage(ctx, `[ACCESS DENIED] user is not premium and has no custom openai_api_key and exceeded the message limit. User used tokens: ${usedTokens} out of ${MAX_TRIAL_TOKENS}.`));
+          console.warn(formatLogMessage(ctx, `[WARN][ACCESS DENIED] user is not premium and has no custom openai_api_key and exceeded the message limit. User used tokens: ${usedTokens} out of ${MAX_TRIAL_TOKENS}.`));
           userSettings.openai_api_key = null;
         }
       }
