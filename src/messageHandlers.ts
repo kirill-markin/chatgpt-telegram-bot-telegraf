@@ -28,7 +28,6 @@ import { convertAudioToMp3, convertImageToBase64, resizeImageFile } from './util
 import { generateMessageBufferKey } from './utils/messageUtils';
 import { pineconeIndex } from './vectorDatabase';
 import { TRIAL_ENDED_ERROR } from './config';
-import e from "express";
 
 
 // Temporary message buffer
@@ -56,9 +55,7 @@ export async function handleAnyMessage(ctx: MyContext, messageType: string) {
 
     const userId = ctx.from?.id;
     const chatId = ctx.chat?.id;
-    if (userId !== undefined && userId !== null && chatId !== undefined && chatId !== null) {
-      messageData.messages.push({ role: 'user', content: messageType, chat_id: chatId, user_id: userId });
-    } else {
+    if (userId === undefined || userId === null || chatId === undefined || chatId === null) {
       throw new Error('userId or chatId is undefined');
     }
 
