@@ -14,17 +14,6 @@ bot.telegram.getMe().then((botInfo) => {
   bot!.context.botUsername = botInfo.username; // Store the bot username in context
 });
 
-const waitForAndLog = async (stopSignal: any, func: any) => {
-  while (!stopSignal()) {
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    try {
-      func();
-    } catch (error) {
-      console.error(error);
-    }
-  }
-};
-
 bot.use(async (ctx: MyContext, next) => {
   const start = new Date();
   let isNextDone = false;
