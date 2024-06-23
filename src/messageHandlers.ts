@@ -155,13 +155,8 @@ export async function handleAnyMessage(ctx: MyContext, messageType: string) {
     // Save the message buffer
     messageBuffers.set(key, messageData);
   } catch (e) {
-    if (e instanceof NoOpenAiApiKeyError) {
-      console.warn(formatLogMessage(ctx, `[WARN] error occurred: ${e}`));
-      await reply(ctx, TRIAL_ENDED_ERROR, 'trial ended');
-    } else {
-      console.error(formatLogMessage(ctx, `[ERROR] error occurred: ${e}`));
-      await reply(ctx, ERROR_MESSAGE, 'error occurred');
-    }
+    console.error(formatLogMessage(ctx, `[ERROR] error occurred: ${e}`));
+    await reply(ctx, ERROR_MESSAGE, 'error occurred');
   }
 }
 
