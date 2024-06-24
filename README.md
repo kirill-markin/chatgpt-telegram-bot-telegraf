@@ -45,9 +45,14 @@ Feel free to interact with the bot and test its capabilities!
     TELEGRAM_BOT_TOKEN=replace_with_your_telegram_bot_token
     OPENAI_API_KEY=replace_with_your_openai_api_key
     DATABASE_URL=replace_with_your_database_url
+
+    # You can change the settings path if needed
     SETTINGS_PATH=./settings/private_en.yaml
 
-    # Only if you want to use Pinecone for Long-Term Memory
+    # Optional: Set the maximum tokens for trial users, default is 0 (no trial)
+    MAX_TRIAL_TOKENS=100000
+
+    # Optional: Only if you want to use Pinecone for Long-Term Memory
     PINECONE_API_KEY=replace_with_your_pinecone_api_key
     PINECONE_INDEX_NAME=replace_with_your_pinecone_index_name
     ```

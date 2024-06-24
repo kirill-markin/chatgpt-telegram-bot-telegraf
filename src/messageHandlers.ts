@@ -1,7 +1,7 @@
 import fs from "fs";
 import axios from "axios";
 import { MyContext, MyMessage, UserData, NoOpenAiApiKeyError } from "./types";
-import { ERROR_MESSAGE, NO_VIDEO_ERROR } from './config';
+import { ERROR_MESSAGE, MAX_TRIAL_TOKENS, NO_VIDEO_ERROR } from './config';
 import { 
   formatLogMessage, 
 } from "./utils/utils";
@@ -28,7 +28,7 @@ import {
 import { convertAudioToMp3, convertImageToBase64, resizeImageFile } from './utils/fileUtils';
 import { generateMessageBufferKey } from './utils/messageUtils';
 import { pineconeIndex } from './vectorDatabase';
-import { TRIAL_ENDED_ERROR } from './config';
+import { TRIAL_ENDED_ERROR, TRIAL_NOT_ENABLED_ERROR } from './config';
 
 
 // Temporary message buffer
@@ -144,7 +144,11 @@ export async function handleAnyMessage(ctx: MyContext, messageType: string) {
       } catch (e) {
         if (e instanceof NoOpenAiApiKeyError) {
           console.warn(formatLogMessage(ctx, `[WARN] error occurred: ${e}`));
-          await reply(ctx, TRIAL_ENDED_ERROR, 'trial ended');
+          let messageToUser = TRIAL_NOT_ENABLED_ERROR;
+          if (MAX_TRIAL_TOKENS > 0) {
+            messageToUser = TRIAL_ENDED_ERROR
+          }
+          await reply(ctx, messageToUser, 'error occurred');
         } else {
           console.error(formatLogMessage(ctx, `[ERROR] error occurred: ${e}`));
           await reply(ctx, ERROR_MESSAGE, 'error occurred');

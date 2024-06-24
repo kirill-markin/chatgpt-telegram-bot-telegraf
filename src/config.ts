@@ -35,9 +35,12 @@ export const MAX_TOKENS_THRESHOLD_TO_REDUCE_HISTORY = maxTokensThreshold - avera
 export const RESET_MESSAGE = bot_settings.strings.reset_message || 'Old messages deleted';
 export const NO_OPENAI_KEY_ERROR = bot_settings.strings.no_openai_key_error || 'No OpenAI key provided. Please contact the bot owner.';
 export const TRIAL_ENDED_ERROR = bot_settings.strings.trial_ended_error || 'Trial period ended. Please contact the bot owner.';
+export const TRIAL_NOT_ENABLED_ERROR = bot_settings.strings.trial_not_enabled_error || 'Trial period is not enabled. Please contact the bot owner.';
 export const NO_VIDEO_ERROR = bot_settings.strings.no_video_error || 'Bot can not process videos.';
 export const NO_ANSWER_ERROR = bot_settings.strings.no_answer_error || 'Bot can not answer to this message.';
-export const MAX_TRIAL_TOKENS = bot_settings.max_trials_tokens || 200_000;
+export const MAX_TRIAL_TOKENS = process.env.MAX_TRIAL_TOKENS 
+  ? parseInt(process.env.MAX_TRIAL_TOKENS) 
+  : (bot_settings.max_trials_tokens || 0);
 export const HELP_MESSAGE = bot_settings.strings.help_string;
 export const ERROR_MESSAGE = bot_settings.strings.error_string;
 export const botSettings = bot_settings;
