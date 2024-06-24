@@ -47,6 +47,21 @@ export async function saveMessagesToDatabase(ctx: MyContext, messages: MyMessage
   }
 }
 
+export async function handleErrorMessage(ctx: MyContext, e: Error | any) {
+  if (e instanceof NoOpenAiApiKeyError) {
+    console.warn(formatLogMessage(ctx, `[WARN] error occurred: ${e}`));
+    let messageToUser = TRIAL_NOT_ENABLED_ERROR;
+    if (MAX_TRIAL_TOKENS > 0) {
+      messageToUser = TRIAL_ENDED_ERROR
+    }
+    await reply(ctx, messageToUser, 'error occurred');
+  } else {
+    console.error(formatLogMessage(ctx, `[ERROR] error occurred: ${e}`));
+    await reply(ctx, ERROR_MESSAGE, 'error occurred');
+  }
+  return;
+}
+
 export async function handleAnyMessage(ctx: MyContext, messageType: string) {
   console.log(formatLogMessage(ctx, `[NEW] ${messageType} received`));
 
@@ -141,26 +156,15 @@ export async function handleAnyMessage(ctx: MyContext, messageType: string) {
           throw new NoOpenAiApiKeyError("OpenAI API key is not set");
         }
         await replyToUser(ctx, userData, pineconeIndex);
-      } catch (e) {
-        if (e instanceof NoOpenAiApiKeyError) {
-          console.warn(formatLogMessage(ctx, `[WARN] error occurred: ${e}`));
-          let messageToUser = TRIAL_NOT_ENABLED_ERROR;
-          if (MAX_TRIAL_TOKENS > 0) {
-            messageToUser = TRIAL_ENDED_ERROR
-          }
-          await reply(ctx, messageToUser, 'error occurred');
-        } else {
-          console.error(formatLogMessage(ctx, `[ERROR] error occurred: ${e}`));
-          await reply(ctx, ERROR_MESSAGE, 'error occurred');
-        }
+      } catch (e: Error | any) {
+        await handleErrorMessage(ctx, e);
       }
     }, 4000);
 
     // Save the message buffer
     messageBuffers.set(key, messageData);
-  } catch (e) {
-    console.error(formatLogMessage(ctx, `[ERROR] error occurred: ${e}`));
-    await reply(ctx, ERROR_MESSAGE, 'error occurred');
+  } catch (e: Error | any) {
+    await handleErrorMessage(ctx, e);
   }
 }
 
