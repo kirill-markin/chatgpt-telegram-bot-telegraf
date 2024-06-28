@@ -50,7 +50,8 @@ const startBot = async () => {
   await setupDatabase();
   console.log('Database initialization complete. Starting bot...');
 
-  await clearPendingUpdates();
+  // DEBUG: Needed in case the bot was stopped while there were pending updates
+  // await clearPendingUpdates();
 
   bot!.launch();
   console.log('Bot started');
