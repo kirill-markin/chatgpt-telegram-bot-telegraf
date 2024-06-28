@@ -24,7 +24,7 @@ export const TELEGRAM_BOT_TOKEN : string = process.env.TELEGRAM_BOT_TOKEN;
 export const PINECONE_API_KEY = process.env.PINECONE_API_KEY;
 export const PINECONE_INDEX_NAME = process.env.PINECONE_INDEX_NAME;
 
-const prompts_path = process.env.SETTINGS_PATH || './settings/private_en.yaml';
+const prompts_path = './temp/__temp_config.yaml';
 const fileContents = fs.readFileSync(prompts_path, 'utf8');
 const bot_settings = yaml.parse(fileContents);
 
