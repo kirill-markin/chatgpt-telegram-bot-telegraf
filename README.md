@@ -47,6 +47,7 @@ Feel free to interact with the bot and test its capabilities!
     DATABASE_URL=replace_with_your_database_url
 
     # You can change the settings path if needed
+    # Path can be URL to static file or local file
     SETTINGS_PATH=./settings/private_en.yaml
 
     # Optional: Set the maximum tokens for trial users, default is 0 (no trial)
@@ -57,7 +58,11 @@ Feel free to interact with the bot and test its capabilities!
     PINECONE_INDEX_NAME=replace_with_your_pinecone_index_name
     ```
 
-4. Adjust the settings in `settings/private_en.yaml` as needed.
+4. If you use remote settings, you can set the URL in the `.env` file in `SETTINGS_PATH`. The URL should point to a YAML file with the the same structure as the `settings/private_en.yaml` file. For example:
+
+    ```env
+    SETTINGS_PATH=https://kirill-markin.com/data/chatgpt-telegram-bot-telegraf_settings.yaml
+    ```
 
 ## Deploy with Docker Compose
 
