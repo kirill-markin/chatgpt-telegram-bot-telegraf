@@ -45,34 +45,57 @@ function copyLocalFile(srcPath, destPath) {
   });
 }
 
+// Function to check and create the 'temp' directory
+function ensureTempDirExists(tempDirPath) {
+  return new Promise((resolve, reject) => {
+    fs.mkdir(tempDirPath, { recursive: true }, (err) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve();
+      }
+    });
+  });
+}
+
 // Main function to check and fetch the config file
 async function fetchConfig() {
-  const localConfigPath = path.join(__dirname, '..', 'temp', '__temp_config.yaml');
-
-  if (!configPath.startsWith('http://') && !configPath.startsWith('https://')) {
-    if (fileExists(configPath)) {
-      console.log(`Using local config file: ${configPath}`);
-      try {
-        await copyLocalFile(configPath, localConfigPath);
-        console.log(`Config file copied to: ${localConfigPath}`);
-        process.env.SETTINGS_PATH = localConfigPath; // Update the environment variable
-      } catch (error) {
-        console.error('Failed to copy the local config file:', error);
-        process.exit(1);
-      }
-    } else {
-      console.error(`Local config file not found: ${configPath}`);
-      process.exit(1);
-    }
-    return;
-  }
+  const tempDirPath = path.join(__dirname, '..', 'temp');
+  const localConfigPath = path.join(tempDirPath, '__temp_config.yaml');
 
   try {
-    await downloadFile(configPath, localConfigPath);
-    console.log(`Config file downloaded to: ${localConfigPath}`);
-    process.env.SETTINGS_PATH = localConfigPath; // Update the environment variable
+    // Ensure the 'temp' directory exists
+    await ensureTempDirExists(tempDirPath);
+    console.log(`Directory ensured: ${tempDirPath}`);
+
+    if (!configPath.startsWith('http://') && !configPath.startsWith('https://')) {
+      if (fileExists(configPath)) {
+        console.log(`Using local config file: ${configPath}`);
+        try {
+          await copyLocalFile(configPath, localConfigPath);
+          console.log(`Config file copied to: ${localConfigPath}`);
+          process.env.SETTINGS_PATH = localConfigPath; // Update the environment variable
+        } catch (error) {
+          console.error('Failed to copy the local config file:', error);
+          process.exit(1);
+        }
+      } else {
+        console.error(`Local config file not found: ${configPath}`);
+        process.exit(1);
+      }
+      return;
+    }
+
+    try {
+      await downloadFile(configPath, localConfigPath);
+      console.log(`Config file downloaded to: ${localConfigPath}`);
+      process.env.SETTINGS_PATH = localConfigPath; // Update the environment variable
+    } catch (error) {
+      console.error('Failed to download the config file:', error);
+      process.exit(1);
+    }
   } catch (error) {
-    console.error('Failed to download the config file:', error);
+    console.error('Failed to ensure temp directory exists:', error);
     process.exit(1);
   }
 }
