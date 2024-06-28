@@ -5,6 +5,7 @@
   "author": "Kirill Markin",
   "license": "MIT",
   "scripts": {
+    "prestart": "node scripts/fetchConfig.js",
     "start": "ts-node --transpile-only src/bot.ts",
     "test": "jest",
     "help": "ts-node src/cli.ts --help",
