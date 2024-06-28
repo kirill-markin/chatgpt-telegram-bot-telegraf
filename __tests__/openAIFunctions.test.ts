@@ -56,9 +56,9 @@ const mockCtx: Partial<MyContext> = {
   from: {
     id: 112249713,
     is_bot: false,
-    first_name: "Kirill",
-    last_name: "Markin",
-    username: "kirmark",
+    first_name: "Test1",
+    last_name: "Test2",
+    username: "test_user",
     language_code: "en",
     is_premium: true,
   }

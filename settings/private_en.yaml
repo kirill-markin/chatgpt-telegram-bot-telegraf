@@ -1,13 +1,13 @@
 gpt_model: "gpt-4o"
 strings:
-  help_string: "Bot chatGPT in telegram  — an assistant that understands voice and text messages in any language. \n\nThe answer can take some time. \n\nLet's start! Please ask me something by voice message 🎙 or by text 💬."
-  error_string: "An error occurred while processing the message. Tell Kirill - let him fix it. Kirill's Telegram: @kirmark. \n\nOr ChatGPT might be down globally, you can check here: https://status.openai.com/"
+  help_string: "Bot chatGPT in telegram  — an assistant that understands voice and text messages in any language. \n\nThe answer can take some time. \n\nLet's start! Please ask me something by voice message 🎙, text 💬 or photo 🌄."
+  error_string: "An error occurred while processing the message. Let the administrator know to fix it. \n\nOr ChatGPT might be down globally, you can check here: https://status.openai.com/"
   reset_message: "Old messages have been deleted from the bot's memory in this chat."
-  no_openai_key_error: "It seems you are not in the list of allowed users. Tell Kirill - let him fix it. Kirill's Telegram: @kirmark"
-  trial_ended_error: "It seems the trial access to the bot has ended. Tell Kirill - let him fix it. Kirill's Telegram: @kirmark"
-  trial_not_enabled_error: "It seems the trial access to the bot is not enabled. Tell Kirill - let him fix it. Kirill's Telegram: @kirmark"
+  no_openai_key_error: "It seems you are not in the list of allowed users. Let the administrator know to fix it."
+  trial_ended_error: "It seems the trial access to the bot has ended. Let the administrator know to fix it."
+  trial_not_enabled_error: "It seems the trial access to the bot is not enabled. Let the administrator know to fix it."
   no_video_error: "The robot does not yet know how to work with videos and will ignore this message."
-  no_answer_error: "The robot could not find the answer to your question. Tell Kirill - let him fix it. Kirill's Telegram: @kirmark"
+  no_answer_error: "The robot could not find the answer to your question. Let the administrator know to fix it."
 prompts:
 - name: "default"
   text: |
