@@ -139,6 +139,22 @@ Ensure you have met the following requirements:
 
 ## User Management
 
+Ensure all dependencies are installed:
+
+```sh
+npm install
+```
+
+### Listing All PREMIUM Users
+
+To print list of all PREMIUM users, use the following command:
+
+```sh
+npm run list-premium
+```
+
+The output will include the user ID, username, and the creation date formatted as `Created at: YYYY-MM-DD HH:MM:SS UTC`, sorted by the most recent creation date first.
+
 ### Displaying Help Information
 
 To display help information about available commands, use the following command:
@@ -151,19 +167,13 @@ npm run help
 
 You can set a user as PREMIUM via the command line.
 
-1. Ensure all dependencies are installed:
+Use the following command to set a user as PREMIUM:
 
-   ```sh
-   npm install
-   ```
+```sh
+npm run set-premium <userId>
+```
 
-2. Use the following command to set a user as PREMIUM:
-
-   ```sh
-   npm run set-premium <userId>
-   ```
-
-   Replace `<userId>` with the ID of the user you want to set as PREMIUM.
+Replace `<userId>` with the ID of the user you want to set as PREMIUM.
 
 Example:
 
@@ -186,16 +196,6 @@ Example:
 ```sh
 npm run remove-premium 123456789
 ```
-
-### Listing All PREMIUM Users
-
-To print list of all PREMIUM users, use the following command:
-
-```sh
-npm run list-premium
-```
-
-The output will include the user ID, username, and the creation date formatted as `Created at: YYYY-MM-DD HH:MM:SS UTC`, sorted by the most recent creation date first.
 
 ## Table Entities Description
 
