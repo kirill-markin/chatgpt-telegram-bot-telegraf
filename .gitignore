@@ -6,3 +6,5 @@ node_modules/
 repo-to-text_*.txt
 
 temp/
+
+myenv/
