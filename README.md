@@ -66,17 +66,17 @@ Feel free to interact with the bot and test its capabilities!
 
 ## Deploy with Docker Compose
 
-1. Ensure Docker Compose is installed on your machine.
+1. Make sure you have the latest version of Docker.
 2. Start the services:
 
     ```bash
-    docker-compose up -d
+    docker compose up -d
     ```
 
 3. To stop the services, run:
 
     ```bash
-    docker-compose down
+    docker compose down
     ```
 
 ## Running with Docker
@@ -123,7 +123,13 @@ Ensure you have met the following requirements:
     npm install
     ```
 
-5. Start the bot:
+5. Run prestart script to fetch the config file:
+
+    ```bash
+    npm run prestart
+    ```
+
+6. Start the bot:
 
     ```bash
     npm start

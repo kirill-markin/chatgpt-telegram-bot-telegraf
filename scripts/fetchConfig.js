@@ -3,12 +3,18 @@ const fs = require("fs");
 const axios = require("axios");
 const path = require("path");
 
-// Load environment variables from .env file if it exists
+// Force rewrite all env variables from .env file
 if (fs.existsSync(".env")) {
-  dotenv.config();
+  const envConfig = dotenv.parse(fs.readFileSync(".env"));
+  for (const k in envConfig) {
+    process.env[k] = envConfig[k];
+  }
 }
 
 const configPath = process.env.SETTINGS_PATH || './settings/private_en.yaml';
+
+console.log(`Config path: ${configPath}`);
+console.log(`process.env.SETTINGS_PATH: ${process.env.SETTINGS_PATH}`);
 
 // Function to check if the file exists locally
 function fileExists(filePath) {
@@ -67,6 +73,8 @@ async function fetchConfig() {
     // Ensure the 'temp' directory exists
     await ensureTempDirExists(tempDirPath);
     console.log(`Directory ensured: ${tempDirPath}`);
+
+    console.log(`Config path: ${configPath}`);
 
     if (!configPath.startsWith('http://') && !configPath.startsWith('https://')) {
       if (fileExists(configPath)) {

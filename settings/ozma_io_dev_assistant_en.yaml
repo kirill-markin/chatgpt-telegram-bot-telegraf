@@ -1,4 +1,5 @@
-gpt_model: "gpt-4o"
+gpt_model: "o1-preview"
+gpt_model_for_image_url: "gpt-4o"
 strings:
   help_string: "The ozma.io developer assistant. Understands text and voice messages. It may take a while to respond. Helps developers understand how ozma.io works and how to create code for views, actions, triggers, etc."
   error_string: "There was an error while processing the message. Tell Kirill to fix it. Kirill's Telegram: @kirmark. \n\nOr ChatGPT is broken worldwide, you can check here: https://status.openai.com/"

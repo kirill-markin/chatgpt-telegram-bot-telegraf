@@ -4,7 +4,13 @@ import { AxiosResponse } from 'axios';
 import pTimeout from 'p-timeout';
 import { formatLogMessage } from './utils/utils';
 import { tokenizeText, convertTokensToText } from './utils/encodingUtils';
-import { CHAT_GPT_DEFAULT_TIMEOUT_MS, GPT_MODEL, MAX_TOKENS_THRESHOLD_TO_REDUCE_HISTORY, DEFAULT_PROMPT_MESSAGE } from './config';
+import { 
+  CHAT_GPT_DEFAULT_TIMEOUT_MS, 
+  GPT_MODEL, 
+  GPT_MODEL_FOR_IMGAGE_URL,
+  MAX_TOKENS_THRESHOLD_TO_REDUCE_HISTORY, 
+  DEFAULT_PROMPT_MESSAGE 
+} from './config';
 import { getUserUsedTokens, upsertUserIfNotExists, getUserByUserId } from './database/database';
 import { MAX_TRIAL_TOKENS, OPENAI_API_KEY } from './config';
 import { truncateMessages } from "./utils/messageUtils";
@@ -88,14 +94,21 @@ export async function getUserSettingsAndOpenAi(ctx: MyContext): Promise<UserData
 }
 
 async function createChatCompletionWithRetries(messages: MyMessage[], openai: OpenAI, retries = 5, timeoutMs = CHAT_GPT_DEFAULT_TIMEOUT_MS) {
+  // FIXME:
+  // If there are image_url in the messages, then change the model to gpt-4o
+  // because o1-preview does not support image_url
+  let model = GPT_MODEL;
+  if (messages.some(message => Array.isArray(message.content) && message.content.some((part) => part.type === 'image_url'))) {
+    model = GPT_MODEL_FOR_IMGAGE_URL;
+  }
   for (let i = 0; i < retries; i++) {
     try {
       const chatGPTAnswer = await pTimeout(
         openai.chat.completions.create({
-          model: GPT_MODEL,
+          model: model,
           // @ts-ignore
           messages: messages,
-          temperature: 0.7,
+          // temperature: 0.7, Not supported in o1-preview
           // max_tokens: 1000,
         }),
         timeoutMs,
