@@ -1,4 +1,4 @@
-gpt_model: "o1-preview"
+gpt_model: "gpt-4o" # "o1-preview"
 gpt_model_for_image_url: "gpt-4o"
 strings:
   help_string: "Bot chatGPT in telegram  — an assistant that understands voice and text messages in any language. \n\nThe answer can take some time. \n\nLet's start! Please ask me something by voice message 🎙, text 💬 or photo 🌄."

@@ -1,4 +1,4 @@
-gpt_model: "o1-preview"
+gpt_model: "gpt-4o" # "o1-preview"
 gpt_model_for_image_url: "gpt-4o"
 strings:
   help_string: "The ozma.io developer assistant. Understands text and voice messages. It may take a while to respond. Helps developers understand how ozma.io works and how to create code for views, actions, triggers, etc."
