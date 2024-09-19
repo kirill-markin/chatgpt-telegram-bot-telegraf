@@ -151,6 +151,14 @@ Ensure all dependencies are installed:
 npm install
 ```
 
+### Displaying Help Information
+
+To display help information about available commands, use the following command:
+
+```sh
+npm run help
+```
+
 ### Listing All PREMIUM Users
 
 To print list of all PREMIUM users, use the following command:
@@ -160,14 +168,6 @@ npm run list-premium
 ```
 
 The output will include the user ID, username, and the creation date formatted as `Created at: YYYY-MM-DD HH:MM:SS UTC`, sorted by the most recent creation date first.
-
-### Displaying Help Information
-
-To display help information about available commands, use the following command:
-
-```sh
-npm run help
-```
 
 ### Setting a User as PREMIUM
 
