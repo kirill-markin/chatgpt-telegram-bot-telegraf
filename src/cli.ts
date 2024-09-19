@@ -3,19 +3,32 @@ import { updateUserForce, getUserByUserId, getAllPremiumUsers } from './database
 import { pool } from './database/database';
 
 const program = new Command();
-
 program
   .command('set-premium <userId>')
   .description('Set a user as premium')
   .action(async (userId) => {
     try {
-      const user = await getUserByUserId(Number(userId));
-      if (user) {
+      let user = await getUserByUserId(Number(userId));
+      if (!user) {
+        // Create a new user if not found
+        user = {
+          user_id: Number(userId),
+          usage_type: 'premium',
+          // Add other required fields with default values
+          username: null,
+          first_name: null,
+          last_name: null,
+          language_code: null,
+          is_bot: false,
+          created_at: new Date(),
+          updated_at: new Date()
+        };
+        await updateUserForce(user);
+        console.log(`New user ${userId} created and set as PREMIUM.`);
+      } else {
         user.usage_type = 'premium';
         await updateUserForce(user);
         console.log(`User ${userId} is now set as PREMIUM.`);
-      } else {
-        console.log(`User with ID ${userId} not found.`);
       }
     } catch (error) {
       console.error('Error setting user as PREMIUM:', error);
