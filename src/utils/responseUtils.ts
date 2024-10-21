@@ -1,12 +1,13 @@
 import { MyContext } from '../types';
 import { formatLogMessage } from './utils';
 import { NO_ANSWER_ERROR } from '../config';
+import { ParseMode } from 'telegraf/types';
 
 const MAX_MESSAGE_LENGTH_TELEGRAM = 4096;
 
-export async function reply(ctx: MyContext, message: string, logTitle: string, logProblemLevel: string = 'error'): Promise<void> {
+export async function reply(ctx: MyContext, message: string, logTitle: string, logProblemLevel: string = 'error', parse_mode: ParseMode='Markdown'): Promise<void> {
   try {
-    await ctx.reply(message);
+    await ctx.reply(message,{parse_mode});
     console.log(formatLogMessage(ctx, `${logTitle} - message sent to user`));
   } catch (error) {
     if (logProblemLevel === 'error') {
