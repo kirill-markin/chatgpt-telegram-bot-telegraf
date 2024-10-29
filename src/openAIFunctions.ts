@@ -23,11 +23,11 @@ export const APPROX_IMAGE_TOKENS = 800;
 // default prompt message to add to the GPT model
 
 let defaultPromptMessageObj = {} as MyMessage;
-const defaultPromptMessageString = DEFAULT_PROMPT_MESSAGE?.toString();
+const defaultPromptMessageString = DEFAULT_PROMPT_MESSAGE?.toString() + "\n\nCurrent date (UTC): " + new Date().toLocaleDateString();
 if (DEFAULT_PROMPT_MESSAGE) {
   defaultPromptMessageObj = {
     "role": "system",
-    "content": defaultPromptMessageString,
+    "content": defaultPromptMessageString
   } as MyMessage;
 } else {
   console.log('Default prompt message not found');
