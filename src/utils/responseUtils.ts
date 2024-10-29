@@ -4,19 +4,37 @@ import { NO_ANSWER_ERROR } from '../config';
 import { ParseMode } from 'telegraf/types';
 
 const MAX_MESSAGE_LENGTH_TELEGRAM = 4096;
+const MAX_RETRIES = 3;
+const RETRY_DELAY_MS = 1000;
 
 export async function reply(ctx: MyContext, message: string, logTitle: string, logProblemLevel: string = 'error', parse_mode: ParseMode='Markdown'): Promise<void> {
-  try {
-    await ctx.reply(message,{parse_mode});
-    console.log(formatLogMessage(ctx, `${logTitle} - message sent to user`));
-  } catch (error) {
-    if (logProblemLevel === 'error') {
-      console.error(formatLogMessage(ctx, `[ERROR] ${logTitle} - error in sending the message to the user: ${error}`));
-    } else if (logProblemLevel === 'warn') {
-      console.warn(formatLogMessage(ctx, `[WARN] ${logTitle} - error in sending the message to the user: ${error}`));
-    } else {
-      throw new Error(`Invalid logProblemLevel: ${logProblemLevel}`);
+  let lastError: any;
+  
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      if (attempt === 1) {
+        await ctx.reply(message, {parse_mode});
+      } else {
+        await ctx.reply(message);
+      }
+      console.log(formatLogMessage(ctx, `${logTitle} - message sent to user (attempt ${attempt})`));
+      return; // Success, exit the function
+    } catch (error) {
+      lastError = error;
+      if (attempt < MAX_RETRIES) {
+        console.log(formatLogMessage(ctx, `Attempt ${attempt} failed, retrying in ${RETRY_DELAY_MS}ms...`));
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
+      }
     }
+  }
+
+  // If we get here, all retries failed
+  if (logProblemLevel === 'error') {
+    console.error(formatLogMessage(ctx, `[ERROR] ${logTitle} - error in sending the message to user after ${MAX_RETRIES} attempts: ${lastError}`));
+  } else if (logProblemLevel === 'warn') {
+    console.warn(formatLogMessage(ctx, `[WARN] ${logTitle} - error in sending the message to user after ${MAX_RETRIES} attempts: ${lastError}`));
+  } else {
+    throw new Error(`Invalid logProblemLevel: ${logProblemLevel}`);
   }
 }
 
