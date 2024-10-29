@@ -1,6 +1,6 @@
 {
   "name": "ChatGPT Telegram Bot",
-  "description": "An advanced Telegram bot using OpenAI's ChatGPT.",
+  "description": "An advanced Telegram bot using OpenAI's ChatGPT and Perplexity AI.",
   "repository": "https://github.com/kirill-markin/chatgpt-telegram-bot-telegraf",
   "env": {
     "TELEGRAM_BOT_TOKEN": {
@@ -10,6 +10,10 @@
     "OPENAI_API_KEY": {
       "description": "Your OpenAI API key",
       "required": true
+    },
+    "PERPLEXITY_API_KEY": {
+      "description": "Your Perplexity API key for enhanced search capabilities",
+      "required": false
     },
     "SETTINGS_PATH": {
       "description": "Path to the settings file",

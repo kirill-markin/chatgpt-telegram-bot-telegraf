@@ -7,12 +7,18 @@ services:
     envVars:
       - key: TELEGRAM_BOT_TOKEN
         sync: false
+        required: true
       - key: OPENAI_API_KEY
         sync: false
+        required: true
+      - key: PERPLEXITY_API_KEY
+        sync: false
+        required: false
       - key: DATABASE_URL
         fromDatabase:
           name: chatgpt_bot_db
           property: connectionString
+        required: true
     healthCheckPath: /health
 
 databases:

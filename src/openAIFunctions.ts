@@ -9,11 +9,14 @@ import {
   GPT_MODEL, 
   GPT_MODEL_FOR_IMGAGE_URL,
   MAX_TOKENS_THRESHOLD_TO_REDUCE_HISTORY, 
-  DEFAULT_PROMPT_MESSAGE 
+  DEFAULT_PROMPT_MESSAGE,
+  PERPLEXITY_API_KEY
 } from './config';
 import { getUserUsedTokens, upsertUserIfNotExists, getUserByUserId } from './database/database';
 import { MAX_TRIAL_TOKENS, OPENAI_API_KEY } from './config';
 import { truncateMessages } from "./utils/messageUtils";
+import { createPerplexityTool, callPerplexity } from './tools/perplexityTool';
+import { reply } from './utils/responseUtils';
 
 export const APPROX_IMAGE_TOKENS = 800;
 
@@ -23,7 +26,7 @@ let defaultPromptMessageObj = {} as MyMessage;
 const defaultPromptMessageString = DEFAULT_PROMPT_MESSAGE?.toString();
 if (DEFAULT_PROMPT_MESSAGE) {
   defaultPromptMessageObj = {
-    "role": "assistant",
+    "role": "system",
     "content": defaultPromptMessageString,
   } as MyMessage;
 } else {
@@ -93,43 +96,140 @@ export async function getUserSettingsAndOpenAi(ctx: MyContext): Promise<UserData
   }
 }
 
-async function createChatCompletionWithRetries(messages: MyMessage[], openai: OpenAI, retries = 5, timeoutMs = CHAT_GPT_DEFAULT_TIMEOUT_MS) {
-  // FIXME:
-  // If there are image_url in the messages, then change the model to gpt-4o
-  // because o1-preview does not support image_url
+async function createChatCompletionWithRetries(
+  messages: MyMessage[],
+  openai: OpenAI,
+  ctx: MyContext,
+  retries = 5,
+  timeoutMs = CHAT_GPT_DEFAULT_TIMEOUT_MS,
+  toolRetries = 3
+) {
   let model = GPT_MODEL;
   if (messages.some(message => Array.isArray(message.content) && message.content.some((part) => part.type === 'image_url'))) {
     model = GPT_MODEL_FOR_IMGAGE_URL;
   }
+  
+  // Create tools array only if Perplexity API key is available
+  let tools;
+  if (PERPLEXITY_API_KEY) {
+    const perplexityTool = createPerplexityTool();
+    tools = perplexityTool ? [perplexityTool] : undefined;
+  }
+
+  // Add no-tools message if tools array is empty
+  if (!tools) {
+    messages.unshift({
+      role: "system",
+      content: "You have no access to external tools or the internet. Please respond using only your built-in knowledge.",
+      chat_id: ctx.chat?.id ?? null,
+      user_id: ctx.from?.id ?? null
+    });
+  }
+
   for (let i = 0; i < retries; i++) {
     try {
-      const chatGPTAnswer = await pTimeout(
+      const completion = await pTimeout(
         openai.chat.completions.create({
           model: model,
-          // @ts-ignore
           messages: messages,
-          // temperature: 0.7, Not supported in o1-preview
-          // max_tokens: 1000,
+          ...(tools && { tools: tools }),
+          ...(tools && { tool_choice: 'auto' }),
         }),
         timeoutMs,
       );
 
-      // DEBUG: Uncomment to see the response in logs
-      // console.log(`chatGPTAnswer: ${JSON.stringify(truncateMessages(chatGPTAnswer), null, 2)}`);
+      // Handle tool calls
+      if (completion.choices[0]?.message?.tool_calls && toolRetries > 0) {
+        const toolCalls = completion.choices[0].message.tool_calls;
+        console.log('Tool calls detected:', toolCalls.length);
+        
+        // Отправляем сообщение пользователю о поиске информации
+        reply(ctx, "🔍🌐 searching via Perplexity... One moment please...", "perplexity search notification", "warn");
 
-      // Assuming the API does not use a status property in the response to indicate success
-      return chatGPTAnswer;
+        try {
+          // Process all tool calls and create corresponding tool messages
+          const toolMessages = await Promise.all(
+            toolCalls.map(async (toolCall: OpenAI.Chat.ChatCompletionMessageToolCall) => {
+              if (toolCall.function.name === 'perplexity') {
+                console.log('Processing Perplexity tool call');
+                try {
+                  const args = JSON.parse(toolCall.function.arguments);
+                  const result = await callPerplexity(args.query);
+
+                  // Append sources to the answer if they exist
+                  if (result.sources && result.sources.length > 0) {
+                    result.answer += `\n\nSources:\n${result.sources.join('\n')}`;
+                  }
+
+                  console.log('Perplexity tool call successful');
+                  return {
+                    role: 'tool',
+                    content: JSON.stringify(result),
+                    tool_call_id: toolCall.id, // Important: match the specific tool_call_id
+                  };
+                } catch (error) {
+                  console.error('Perplexity tool call failed:', error);
+                  return {
+                    role: 'tool',
+                    content: JSON.stringify({
+                      answer: "Sorry, I couldn't get additional information from Perplexity. I'll try to answer based on my existing knowledge.",
+                      error: error instanceof Error ? error.message : 'Unknown error',
+                      timestamp: new Date().toISOString()
+                    }),
+                    tool_call_id: toolCall.id,
+                  };
+                }
+              }
+              return null;
+            })
+          );
+
+          console.log('All tool results processed');
+
+          // Add assistant message with tool calls
+          messages.push({
+            role: 'assistant',
+            content: completion.choices[0].message.content,
+            tool_calls: toolCalls,
+            chat_id: ctx.chat?.id ?? null,
+            user_id: ctx.from?.id ?? null
+          });
+
+          // Add all tool response messages
+          messages.push(...toolMessages.filter(msg => msg !== null));
+
+          // Make another call with decremented toolRetries
+          return await createChatCompletionWithRetries(
+            messages,
+            openai,
+            ctx,
+            retries - 1,
+            timeoutMs,
+            toolRetries - 1
+          );
+        } catch (toolError) {
+          console.error(`Error processing tool calls: ${toolError}`);
+          // Retry the chat completion if tool call fails
+          if (i < retries - 1) {
+            console.log(`Retrying chat completion after tool call failure. Retries left: ${retries - i - 1}`);
+            continue;
+          }
+          // If this was the last retry, return the completion without tool results
+          return completion;
+        }
+      }
+
+      return completion;
     } catch (error) {
       if (error instanceof pTimeout.TimeoutError) {
         console.error(`openai.createChatCompletion timed out. Retries left: ${retries - i - 1}`);
       } else if (error instanceof OpenAI.APIError) {
         console.error(`openai.createChatCompletion failed. Retries left: ${retries - i - 1}`);
-        console.error(error.status);  // e.g. 401
-        console.error(error.message); // e.g. The authentication token you passed was invalid...
-        console.error(error.code);    // e.g. 'invalid_api_key'
-        console.error(error.type);    // e.g. 'invalid_request_error'
+        console.error(error.status);
+        console.error(error.message);
+        console.error(error.code);
+        console.error(error.type);
       } else {
-        // Non-API and non-timeout error
         console.error(error);
       }
       
@@ -332,6 +432,7 @@ export async function createCompletionWithRetriesAndMemory(
     const chatGPTAnswer = await createChatCompletionWithRetries(
       finalMessages,
       openai,
+      ctx,
       retries,
       timeoutMs
     );
@@ -351,3 +452,5 @@ export function transcribeAudioWithRetries(fileStream: File, openai: OpenAI, ret
       return transcribeAudioWithRetries(fileStream, openai, retries - 1);
     });
 }
+
+const tools = [createPerplexityTool()];
