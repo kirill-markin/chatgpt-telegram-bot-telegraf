@@ -20,10 +20,12 @@ export interface MyMessageContent {
 }
 
 export interface MyMessage {
-  role: "user" | "assistant";
+  role: "system" | "user" | "assistant" | "tool";
   content: string | MyMessageContent[];
   chat_id: number | null;
   user_id: number | null;
+  tool_calls?: any[];
+  tool_call_id?: string;
 }
 
 export interface Prompt {

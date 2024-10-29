@@ -20,6 +20,7 @@ Feel free to interact with the bot and test its capabilities!
 - **Voice Message Processing**: Handles voice messages, converting them to text for processing.
 - **Photo Message Processing**: Handles photo messages, converting them to text for processing.
 - **OpenAI's ChatGPT Integration**: Utilizes the powerful ChatGPT model to generate responses.
+- **Perplexity AI Integration**: Enhanced search capabilities for more accurate responses.
 - **PostgreSQL Database**: Stores user data and interactions in a PostgreSQL database.
 - **Docker and Docker Compose Support**: Easily deploy the bot using Docker and Docker Compose.
 - **Pinecone Integration**: Optional long-term memory support using Pinecone.
@@ -49,6 +50,9 @@ Feel free to interact with the bot and test its capabilities!
     # You can change the settings path if needed
     # Path can be URL to static file or local file
     SETTINGS_PATH=./settings/private_en.yaml
+
+    # Optional: Perplexity API key for enhanced search capabilities
+    PERPLEXITY_API_KEY=replace_with_your_perplexity_api_key
 
     # Optional: Set the maximum tokens for trial users, default is 0 (no trial)
     MAX_TRIAL_TOKENS=100000
@@ -97,6 +101,7 @@ Ensure you have met the following requirements:
 - Node.js and npm installed, long-term support (lts) version recomended to avoid warnings
 - PostgreSQL database
 - OpenAI API key
+- Perplexity API key (optional, for enhanced search capabilities)
 - Docker and Docker Compose (optional)
 - Pinecone API key (optional)
 

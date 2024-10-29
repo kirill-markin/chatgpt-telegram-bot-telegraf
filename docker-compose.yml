@@ -7,6 +7,12 @@ services:
       - "8080:8080"
     environment:
       - NODE_ENV=production
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - DATABASE_URL=${DATABASE_URL}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - PINECONE_API_KEY=${PINECONE_API_KEY}
+      - PINECONE_INDEX_NAME=${PINECONE_INDEX_NAME}
+      - PERPLEXITY_API_KEY=${PERPLEXITY_API_KEY}
     volumes:
       - .:/app
     command: npm start
