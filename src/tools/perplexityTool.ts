@@ -47,7 +47,10 @@ export async function callPerplexity(
         model: config?.model || 'llama-3.1-sonar-large-128k-online',
         messages: [{
           role: 'user',
-          content: query + "\n\nPlease write all related urls next to the answer if possible."
+          content: 
+            query + 
+            "\n\nAnswer with long text and a lot of details and examples." + 
+            "\n\nTry to add all related full urls next to the answer if possible."
         }],
         max_tokens: config?.maxTokens || 1024
       },
