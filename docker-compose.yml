@@ -14,4 +14,3 @@ services:
       - PINECONE_API_KEY=${PINECONE_API_KEY}
       - PINECONE_INDEX_NAME=${PINECONE_INDEX_NAME}
       - PERPLEXITY_API_KEY=${PERPLEXITY_API_KEY}
-    command: npm start
