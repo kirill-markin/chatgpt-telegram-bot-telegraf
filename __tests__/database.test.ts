@@ -2,13 +2,7 @@ import { Pool } from 'pg';
 import dotenv from 'dotenv';
 
 // Mock the pg module
-jest.mock('pg', () => {
-  const mPool = {
-    query: jest.fn().mockResolvedValue({ rows: [{ id: 1, name: 'Test User' }] }),
-    end: jest.fn(),
-  };
-  return { Pool: jest.fn(() => mPool) };
-});
+jest.mock('pg');
 
 // Load environment variables from .env file
 dotenv.config();

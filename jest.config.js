@@ -8,4 +8,7 @@ module.exports = {
     },
     testMatch: ['**/__tests__/**/*.[jt]s?(x)'],
     moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
+    moduleNameMapper: {
+        '^tiktoken$': '<rootDir>/__mocks__/tiktoken.js'
+    },
 };
