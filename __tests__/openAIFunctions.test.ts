@@ -125,6 +125,33 @@ describe('truncateHistoryToTokenLimit', () => {
 
     expect(reducedMessages).toEqual([]);
   });
+
+  it('should handle messages with only image URLs', () => {
+    const maxTokens = 1600; // More than enough for two images
+    const imageMessages: MyMessage[] = [
+      {
+        role: 'user',
+        content: [{ type: 'image_url', image_url: { url: 'image1_url' } }],
+        chat_id: 1,
+        user_id: 1,
+      },
+      {
+        role: 'user',
+        content: [{ type: 'image_url', image_url: { url: 'image2_url' } }],
+        chat_id: 1,
+        user_id: 1,
+      },
+    ];
+
+    const reducedMessages = truncateHistoryToTokenLimit(mockCtx as MyContext, imageMessages, maxTokens);
+    expect(reducedMessages.length).toEqual(2);
+  });
+
+  it('should handle a very high token limit', () => {
+    const maxTokens = 10000; // Arbitrarily high token limit
+    const reducedMessages = truncateHistoryToTokenLimit(mockCtx as MyContext, mockMessages, maxTokens);
+    expect(reducedMessages).toEqual(mockMessages);
+  });
 });
 
 describe('countTotalTokens', () => {
@@ -139,5 +166,23 @@ describe('countTotalTokens', () => {
   it('should return 0 for an empty array', () => {
     const totalTokens = countTotalTokens([]);
     expect(totalTokens).toEqual(0);
+  });
+
+  it('should correctly calculate tokens for mixed content types', () => {
+    const mixedMessages: MyMessage[] = [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'Short text' },
+          { type: 'image_url', image_url: { url: 'image_url' } },
+        ],
+        chat_id: 1,
+        user_id: 1,
+      },
+    ];
+
+    const totalTokens = countTotalTokens(mixedMessages);
+    const expectedTokens = 10 + APPROX_IMAGE_TOKENS; // Adjust based on actual tokenization logic
+    expect(totalTokens).toEqual(expectedTokens);
   });
 });
