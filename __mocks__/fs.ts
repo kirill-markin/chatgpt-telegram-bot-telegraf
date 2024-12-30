@@ -21,7 +21,12 @@ const fs = {
     }
     return '';
   }),
-  existsSync: jest.fn((path: string) => path === '.env'),
+  existsSync: jest.fn((path: string) => {
+    return path === '.env' || path === './temp/__temp_config.yaml';
+  }),
+  unlink: jest.fn().mockImplementation((path, callback) => {
+    if (callback) callback(null);
+  }),
 };
 
 export default fs;
