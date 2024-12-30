@@ -2,6 +2,10 @@ import { reply, sendSplitMessage, sendResponse } from '../src/utils/responseUtil
 import { MyContext } from '../src/types';
 import { NO_ANSWER_ERROR } from '../src/config';
 
+// Mock modules before importing anything else
+jest.mock('fs');
+jest.mock('yaml');
+
 describe('Response Utils', () => {
   let mockContext: Partial<MyContext>;
 
