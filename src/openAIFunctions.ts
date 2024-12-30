@@ -112,8 +112,24 @@ async function createChatCompletionWithRetries(
   // Create tools array only if Perplexity API key is available
   let tools;
   if (PERPLEXITY_API_KEY) {
-    const perplexityTool = createPerplexityTool();
-    tools = perplexityTool ? [perplexityTool] : undefined;
+    const perplexityTool = {
+      type: 'function' as const,
+      function: {
+        name: 'perplexity',
+        description: 'Search the internet for current information',
+        parameters: {
+          type: 'object',
+          properties: {
+            query: {
+              type: 'string',
+              description: 'The search query'
+            }
+          },
+          required: ['query']
+        }
+      }
+    };
+    tools = [perplexityTool];
   }
 
   // Add no-tools message if tools array is empty
@@ -128,13 +144,32 @@ async function createChatCompletionWithRetries(
 
   for (let i = 0; i < retries; i++) {
     try {
+      const filteredMessages = messages.filter(msg => msg.role !== 'tool' || (msg.role === 'tool' && 'tool_call_id' in msg));
+
+      type OpenAIMessage = {
+        role: 'system' | 'user' | 'assistant' | 'tool';
+        content: string;
+        tool_call_id?: string;
+        tool_calls?: any[];
+      };
+
+      const formattedMessages = filteredMessages.map(msg => ({
+        role: msg.role,
+        content: Array.isArray(msg.content) 
+          ? msg.content.map(part => part.type === 'text' ? part.text : '').join('')
+          : msg.content,
+        ...(msg.tool_call_id && { tool_call_id: msg.tool_call_id }),
+        ...(msg.tool_calls && { tool_calls: msg.tool_calls })
+      })) as OpenAI.Chat.ChatCompletionMessageParam[];
+
       const completion = await pTimeout(
         openai.chat.completions.create({
           model: model,
-          messages: messages,
+          messages: formattedMessages,
+          stream: false,
           ...(tools && { tools: tools }),
           ...(tools && { tool_choice: 'auto' }),
-        }),
+        }) as Promise<OpenAI.Chat.ChatCompletion>,
         timeoutMs,
       );
 
@@ -189,14 +224,22 @@ async function createChatCompletionWithRetries(
           // Add assistant message with tool calls
           messages.push({
             role: 'assistant',
-            content: completion.choices[0].message.content,
+            content: completion.choices[0].message.content ?? '',
             tool_calls: toolCalls,
             chat_id: ctx.chat?.id ?? null,
             user_id: ctx.from?.id ?? null
           });
 
           // Add all tool response messages
-          messages.push(...toolMessages.filter(msg => msg !== null));
+          messages.push(...toolMessages
+            .filter(msg => msg !== null)
+            .map(msg => ({
+              ...msg,
+              role: msg.role as "tool" | "assistant" | "system" | "user",
+              chat_id: ctx.chat?.id ?? null,
+              user_id: ctx.from?.id ?? null
+            }))
+          );
 
           // Make another call with decremented toolRetries
           return await createChatCompletionWithRetries(
