@@ -37,13 +37,12 @@ const messageBuffers = new Map<string, { messages: MyMessage[], timer: NodeJS.Ti
 export async function saveMessagesToDatabase(ctx: MyContext, messages: MyMessage[]) {
   console.log(formatLogMessage(ctx, `Saving ${messages.length} messages to the database`));
 
-  // TODO: Add event for each message to the database
-
   try {
     await addMessagesBatch(messages);
     console.log(formatLogMessage(ctx, `Messages saved to the database`));
   } catch (error) {
     console.error(formatLogMessage(ctx, `[ERROR] error in saving messages to the database: ${error}`));
+    throw error;
   }
 }
 
