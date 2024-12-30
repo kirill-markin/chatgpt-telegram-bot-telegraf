@@ -1,8 +1,9 @@
+// Mock environment variables at the top of the file
+process.env.OPENAI_API_KEY = 'test-openai-api-key';
+
+// Import necessary modules after setting environment variables
 import { truncateHistoryToTokenLimit, countTotalTokens, APPROX_IMAGE_TOKENS } from '../src/openAIFunctions';
 import { MyContext, MyMessage } from '../src/types';
-
-// Mock environment variables
-process.env.OPENAI_API_KEY = 'test-openai-api-key';
 
 // Mock data
 const mockMessages: MyMessage[] = [
