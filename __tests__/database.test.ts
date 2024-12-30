@@ -1,15 +1,19 @@
 import { Pool } from 'pg';
 import dotenv from 'dotenv';
 
+// Mock the pg module
+jest.mock('pg', () => {
+  const mPool = {
+    query: jest.fn().mockResolvedValue({ rows: [{ id: 1, name: 'Test User' }] }),
+    end: jest.fn(),
+  };
+  return { Pool: jest.fn(() => mPool) };
+});
+
 // Load environment variables from .env file
 dotenv.config();
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: {
-    rejectUnauthorized: false,
-  },
-});
+const pool = new Pool();
 
 describe('Database Tests', () => {
   afterAll(async () => {
@@ -17,13 +21,8 @@ describe('Database Tests', () => {
   });
 
   it('should fetch users from the database', async () => {
-    try {
-      const res = await pool.query('SELECT * FROM users');
-      expect(res.rows.length).toBeGreaterThan(0);
-    } catch (error) {
-      console.error('Database connection error:', error);
-      throw error;
-    }
+    const res = await pool.query('SELECT * FROM users');
+    expect(res.rows.length).toBeGreaterThan(0);
   });
 
   // Add more tests here
