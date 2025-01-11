@@ -156,7 +156,7 @@ async function createChatCompletionWithRetries(
       const formattedMessages = filteredMessages.map(msg => ({
         role: msg.role,
         content: Array.isArray(msg.content) 
-          ? msg.content.map(part => part.type === 'text' ? part.text : '').join('')
+          ? msg.content
           : msg.content,
         ...(msg.tool_call_id && { tool_call_id: msg.tool_call_id }),
         ...(msg.tool_calls && { tool_calls: msg.tool_calls })

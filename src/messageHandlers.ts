@@ -29,6 +29,7 @@ import { convertAudioToMp3, convertImageToBase64, resizeImageFile } from './util
 import { generateMessageBufferKey } from './utils/messageUtils';
 import { pineconeIndex } from './vectorDatabase';
 import { TRIAL_ENDED_ERROR, TRIAL_NOT_ENABLED_ERROR } from './config';
+import { Message } from 'telegraf/types';
 
 
 // Temporary message buffer
@@ -297,41 +298,87 @@ export async function handleAudioFile(ctx: MyContext, fileId: string, mimeType: 
 
 export async function handlePhotoMessage(ctx: MyContext): Promise<string> {
   try {
-    // @ts-ignore
-    const photo = ctx.message.photo[ctx.message.photo.length - 1]; // Get the highest resolution photo
-    const fileId = photo.file_id;
+    // Log start of processing
+    console.log(formatLogMessage(ctx, 'Processing photo'));
 
-    const url = await ctx.telegram.getFileLink(fileId);
-    const response = await axios({ url: url.toString(), responseType: 'stream' });
-    if (!fs.existsSync('./temp')) {
-      fs.mkdirSync('./temp');
+    // Input validation
+    const message = ctx.message as Message.PhotoMessage;
+    if (!message?.photo || message.photo.length === 0) {
+      throw new Error('No photo found in message');
     }
-    const inputFilePath = `./temp/${fileId}.jpg`;
-    const resizedFilePath = `./temp/${fileId}_resized.jpg`;
-    await new Promise((resolve, reject) => {
-      response.data.pipe(fs.createWriteStream(inputFilePath))
-        .on('error', reject)
-        .on('finish', resolve);
-    });
 
-    // Resize the image
-    await resizeImageFile(inputFilePath, resizedFilePath, 1024, 1024);
-    console.log(formatLogMessage(ctx, `photo resized to 1024x1024 max as ${resizedFilePath}`));
+    // Get the highest resolution photo
+    const photo = message.photo[message.photo.length - 1];
+    
+    // Validate photo object
+    if (!photo.file_id || !photo.width || !photo.height) {
+      throw new Error('Invalid photo data');
+    }
 
-    // Encode the image to base64
-    const base64Image = await convertImageToBase64(resizedFilePath);
-    const base64Content: string = `data:image/jpeg;base64,${base64Image}`;
+    const fileId = photo.file_id;
+    
+    // Generate unique file paths
+    const timestamp = Date.now();
+    const uniqueId = `${fileId}-${timestamp}`;
+    const inputFilePath = `./temp/${uniqueId}.jpg`;
+    const resizedFilePath = `./temp/${uniqueId}_resized.jpg`;
 
-    // Delete the temporary files
-    fs.unlink(inputFilePath, (err) => {
-      if (err) console.error(err);
-    });
-    fs.unlink(resizedFilePath, (err) => {
-      if (err) console.error(err);
-    });
+    try {
+      // Ensure temp directory exists
+      if (!fs.existsSync('./temp')) {
+        fs.mkdirSync('./temp');
+      }
 
-    return base64Content;
-  } catch (e) {
-    throw e;
+      // Get file URL and download
+      const url = await ctx.telegram.getFileLink(fileId);
+      const response = await axios({ url: url.toString(), responseType: 'stream' });
+
+      // Save the file
+      await new Promise((resolve, reject) => {
+        response.data.pipe(fs.createWriteStream(inputFilePath))
+          .on('error', reject)
+          .on('finish', resolve);
+      });
+
+      // Resize the image
+      await resizeImageFile(inputFilePath, resizedFilePath, 1024, 1024);
+      console.log(formatLogMessage(ctx, `Photo resized to 1024x1024 max as ${resizedFilePath}`));
+
+      // Encode the image to base64
+      const base64Image = await convertImageToBase64(resizedFilePath);
+      const base64Content: string = `data:image/jpeg;base64,${base64Image}`;
+
+      // Log success
+      console.log(formatLogMessage(ctx, 'Photo processed successfully'));
+
+      return base64Content;
+    } finally {
+      // Cleanup temporary files
+      try {
+        if (fs.existsSync(inputFilePath)) {
+          await new Promise<void>((resolve, reject) => {
+            fs.unlink(inputFilePath, (err) => err ? reject(err) : resolve());
+          });
+        }
+      } catch (cleanupError: unknown) {
+        const error = cleanupError instanceof Error ? cleanupError : new Error(String(cleanupError));
+        console.error(formatLogMessage(ctx, `Error cleaning up input file: ${error.message}`));
+      }
+
+      try {
+        if (fs.existsSync(resizedFilePath)) {
+          await new Promise<void>((resolve, reject) => {
+            fs.unlink(resizedFilePath, (err) => err ? reject(err) : resolve());
+          });
+        }
+      } catch (cleanupError: unknown) {
+        const error = cleanupError instanceof Error ? cleanupError : new Error(String(cleanupError));
+        console.error(formatLogMessage(ctx, `Error cleaning up resized file: ${error.message}`));
+      }
+    }
+  } catch (processError: unknown) {
+    const error = processError instanceof Error ? processError : new Error(String(processError));
+    console.error(formatLogMessage(ctx, `Error processing photo: ${error.message}`));
+    throw error;
   }
 }

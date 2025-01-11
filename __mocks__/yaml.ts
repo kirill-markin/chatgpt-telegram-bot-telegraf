@@ -1,7 +1,7 @@
 const yaml = {
   parse: jest.fn((text: string) => ({
-    gpt_model: 'gpt-4',
-    gpt_model_for_image_url: 'gpt-4-vision-preview',
+    gpt_model: 'gpt-4o',
+    gpt_model_for_image_url: 'gpt-4o',
     strings: {
       reset_message: 'Old messages deleted',
       no_openai_key_error: 'No OpenAI key provided. Please contact the bot owner.',

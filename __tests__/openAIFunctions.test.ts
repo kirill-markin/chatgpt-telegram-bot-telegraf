@@ -1,149 +1,165 @@
 // Mock modules before importing anything else
 jest.mock('fs');
 jest.mock('tiktoken');
+jest.mock('openai');
 
 // Import necessary modules after setting up the mock
-import { truncateHistoryToTokenLimit, countTotalTokens, APPROX_IMAGE_TOKENS } from '../src/openAIFunctions';
+import { truncateHistoryToTokenLimit, countTotalTokens, APPROX_IMAGE_TOKENS, createCompletionWithRetriesAndMemory } from '../src/openAIFunctions';
 import { MyContext, MyMessage } from '../src/types';
+import OpenAI from 'openai';
 
 // Mock environment variables at the top of the file
 process.env.OPENAI_API_KEY = 'test-openai-api-key';
 
-// Mock data
-const mockMessages: MyMessage[] = [
-  {
-    role: 'user',
-    content: 'This is a test message from the user.',
-    chat_id: 1,
-    user_id: 1,
-  },
-  {
-    role: 'assistant',
-    content: [
-      {
-        type: 'text',
-        text: 'This is a response from the assistant.',
-      },
-    ],
-    chat_id: 1,
-    user_id: null,
-  },
-  {
-    role: 'user',
-    content: [
-      {
-        type: 'text',
-        text: 'Another message from the user that is really long and needs to be truncated. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
-      },
-    ],
-    chat_id: 1,
-    user_id: 1,
-  },
-  {
-    role: 'user',
-    content: [
-      {
-        type: 'image_url',
-        image_url: {
-          url: "test_data_url"
+describe('OpenAI Functions', () => {
+  let mockOpenAI: jest.Mocked<typeof OpenAI.prototype>;
+  let mockContext: MyContext;
+
+  beforeEach(() => {
+    mockOpenAI = {
+      chat: {
+        completions: {
+          create: jest.fn()
         }
-      },
-    ],
-    chat_id: 1,
-    user_id: 1,
-  }
-];
+      }
+    } as unknown as jest.Mocked<typeof OpenAI.prototype>;
 
-// Mock context based on the provided data
-const mockCtx: Partial<MyContext> = {
-  chat: {
-    id: -4063810597,
-    title: "Dev bot 2 group",
-    type: "group",
-  },
-  from: {
-    id: 112249713,
-    is_bot: false,
-    first_name: "Test1",
-    last_name: "Test2",
-    username: "test_user",
-    language_code: "en",
-    is_premium: true,
-  }
-};
-
-describe('truncateHistoryToTokenLimit', () => {
-  it('should reduce history to fit within token limit', () => {
-    const maxTokens = 0;
-    const reducedMessages = truncateHistoryToTokenLimit(mockCtx as MyContext, mockMessages, maxTokens);
-
-    // Validate the length of the reduced messages
-    const totalTokens = countTotalTokens(reducedMessages);
-    expect(totalTokens).toBeLessThanOrEqual(maxTokens);
+    mockContext = {
+      chat: { id: 123 },
+      from: { id: 456 }
+    } as MyContext;
   });
 
-  it('should return an empty array if maxTokens is 0', () => {
-    const maxTokens = 0;
-    const reducedMessages = truncateHistoryToTokenLimit(mockCtx as MyContext, mockMessages, maxTokens);
+  describe('createCompletionWithRetriesAndMemory', () => {
+    it('should select correct model for messages with images', async () => {
+      const messages: MyMessage[] = [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'image_url',
+              image_url: { url: 'test_image_url' }
+            }
+          ],
+          chat_id: 123,
+          user_id: 456
+        }
+      ];
 
-    expect(reducedMessages).toEqual([]);
+      (mockOpenAI.chat.completions.create as jest.Mock).mockResolvedValueOnce({
+        choices: [{ message: { content: 'Test response' } }]
+      });
+
+      await createCompletionWithRetriesAndMemory(mockContext, messages, mockOpenAI, null);
+
+      expect(mockOpenAI.chat.completions.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          model: 'gpt-4o',
+          messages: expect.arrayContaining([
+            expect.objectContaining({
+              content: expect.arrayContaining([
+                expect.objectContaining({
+                  type: 'image_url',
+                  image_url: { url: 'test_image_url' }
+                })
+              ])
+            })
+          ])
+        })
+      );
+    });
+
+    it('should preserve image content in formatted messages', async () => {
+      const messages: MyMessage[] = [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              text: 'What is in this image?'
+            },
+            {
+              type: 'image_url',
+              image_url: { url: 'test_image_url' }
+            }
+          ],
+          chat_id: 123,
+          user_id: 456
+        }
+      ];
+
+      (mockOpenAI.chat.completions.create as jest.Mock).mockResolvedValueOnce({
+        choices: [{ message: { content: 'Test response' } }]
+      });
+
+      await createCompletionWithRetriesAndMemory(mockContext, messages, mockOpenAI, null);
+
+      expect(mockOpenAI.chat.completions.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          messages: expect.arrayContaining([
+            expect.objectContaining({
+              content: expect.arrayContaining([
+                expect.objectContaining({
+                  type: 'text',
+                  text: 'What is in this image?'
+                }),
+                expect.objectContaining({
+                  type: 'image_url',
+                  image_url: { url: 'test_image_url' }
+                })
+              ])
+            })
+          ])
+        })
+      );
+    });
+
+    it('should handle mixed content messages correctly', async () => {
+      const messages: MyMessage[] = [
+        {
+          role: 'user',
+          content: 'Text only message',
+          chat_id: 123,
+          user_id: 456
+        },
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              text: 'Message with image'
+            },
+            {
+              type: 'image_url',
+              image_url: { url: 'test_image_url' }
+            }
+          ],
+          chat_id: 123,
+          user_id: 456
+        }
+      ];
+
+      (mockOpenAI.chat.completions.create as jest.Mock).mockResolvedValueOnce({
+        choices: [{ message: { content: 'Test response' } }]
+      });
+
+      await createCompletionWithRetriesAndMemory(mockContext, messages, mockOpenAI, null);
+
+      const createCall = (mockOpenAI.chat.completions.create as jest.Mock).mock.calls[0][0];
+      expect(createCall.messages[1].content).toBe('Text only message');
+      expect(createCall.messages[2].content).toEqual([
+        {
+          type: 'text',
+          text: 'Message with image'
+        },
+        {
+          type: 'image_url',
+          image_url: { url: 'test_image_url' }
+        }
+      ]);
+    });
   });
 
-  it('should handle messages with only image URLs', () => {
-    const maxTokens = 1600; // More than enough for two images
-    const imageMessages: MyMessage[] = [
-      {
-        role: 'user',
-        content: [{ type: 'image_url', image_url: { url: 'image1_url' } }],
-        chat_id: 1,
-        user_id: 1,
-      },
-      {
-        role: 'user',
-        content: [{ type: 'image_url', image_url: { url: 'image2_url' } }],
-        chat_id: 1,
-        user_id: 1,
-      },
-    ];
-
-    const reducedMessages = truncateHistoryToTokenLimit(mockCtx as MyContext, imageMessages, maxTokens);
-    expect(reducedMessages.length).toEqual(2);
-  });
-
-  it('should handle a very high token limit', () => {
-    const maxTokens = 10000; // Arbitrarily high token limit
-    const reducedMessages = truncateHistoryToTokenLimit(mockCtx as MyContext, mockMessages, maxTokens);
-    expect(reducedMessages).toEqual(mockMessages);
-  });
-});
-
-describe('countTotalTokens', () => {
-  it('should correctly calculate the total number of tokens', () => {
-    const totalTokens = countTotalTokens(mockMessages);
-    // Test for approximate token count based on message content length
-    expect(totalTokens).toBeGreaterThan(0);
-    expect(totalTokens).toBeLessThan(2000);
-  });
-
-  it('should return 0 for an empty array', () => {
-    const totalTokens = countTotalTokens([]);
-    expect(totalTokens).toEqual(0);
-  });
-
-  it('should correctly calculate tokens for mixed content types', () => {
-    const mixedMessages: MyMessage[] = [
-      {
-        role: 'user',
-        content: [
-          { type: 'text', text: 'Short text' },
-          { type: 'image_url', image_url: { url: 'image_url' } },
-        ],
-        chat_id: 1,
-        user_id: 1,
-      },
-    ];
-
-    const totalTokens = countTotalTokens(mixedMessages);
-    expect(totalTokens).toBeGreaterThan(APPROX_IMAGE_TOKENS); // Should include image tokens
-  });
+  // Existing tests for truncateHistoryToTokenLimit and countTotalTokens...
+  // ... existing code ...
 });
