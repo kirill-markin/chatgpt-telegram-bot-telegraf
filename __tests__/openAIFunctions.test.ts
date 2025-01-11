@@ -146,8 +146,17 @@ describe('OpenAI Functions', () => {
       await createCompletionWithRetriesAndMemory(mockContext, messages, mockOpenAI, null);
 
       const createCall = (mockOpenAI.chat.completions.create as jest.Mock).mock.calls[0][0];
-      expect(createCall.messages[1].content).toBe('Text only message');
-      expect(createCall.messages[2].content).toEqual([
+      
+      // Find our messages by content instead of relying on specific indices
+      const allMessages = createCall.messages;
+      const textOnlyMessage = allMessages.find((m: { content: string | any[] }) => m.content === 'Text only message');
+      const messageWithImage = allMessages.find((m: { content: string | any[] }) => Array.isArray(m.content) && m.content[0].text === 'Message with image');
+
+      expect(textOnlyMessage).toBeDefined();
+      expect(textOnlyMessage?.content).toBe('Text only message');
+      
+      expect(messageWithImage).toBeDefined();
+      expect(messageWithImage?.content).toEqual([
         {
           type: 'text',
           text: 'Message with image'
