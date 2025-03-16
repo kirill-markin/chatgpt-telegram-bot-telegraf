@@ -53,7 +53,7 @@ export async function callPerplexity(
           'Content-Type': 'application/json'
         },
         data: {
-          model: config?.model || 'llama-3.1-sonar-huge-128k-online',
+          model: config?.model || 'sonar-pro',
           messages: [{
             role: 'user',
             content: query + 
