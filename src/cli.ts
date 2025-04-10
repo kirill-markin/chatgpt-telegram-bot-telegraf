@@ -1,5 +1,5 @@
 import { Command } from 'commander';
-import { updateUserForce, getUserByUserId, getAllPremiumUsers } from './database/database';
+import { updateUserForce, getUserByUserId, getAllPremiumUsers, upsertUserIfNotExists } from './database/database';
 import { pool } from './database/database';
 
 const program = new Command();
@@ -9,26 +9,45 @@ program
   .action(async (userId) => {
     try {
       let user = await getUserByUserId(Number(userId));
+      console.log('Initial user query result:', user);
+      
       if (!user) {
-        // Create a new user if not found
-        user = {
+        // Create a new user if not found using upsert
+        const newUser = {
           user_id: Number(userId),
-          usage_type: 'premium',
-          // Add other required fields with default values
-          username: null,
-          first_name: null,
-          last_name: null,
+          username: '',
+          default_language_code: '',
           language_code: null,
-          is_bot: false,
-          created_at: new Date(),
-          updated_at: new Date()
+          openai_api_key: null,
+          usage_type: 'premium'
         };
-        await updateUserForce(user);
+        console.log('Creating new user with:', newUser);
+        const result = await upsertUserIfNotExists(newUser);
+        console.log('Upsert result:', result);
         console.log(`New user ${userId} created and set as PREMIUM.`);
       } else {
+        // Update existing user
+        console.log('Updating existing user from:', user);
         user.usage_type = 'premium';
-        await updateUserForce(user);
+        console.log('Updating to:', user);
+        const result = await updateUserForce(user);
+        console.log('Update result:', result);
         console.log(`User ${userId} is now set as PREMIUM.`);
+      }
+      
+      // Wait a moment for the database update to take effect
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Verify the user is set as premium
+      const verifyUser = await getUserByUserId(Number(userId));
+      console.log('Verification query result:', verifyUser);
+      
+      if (verifyUser && verifyUser.usage_type === 'premium') {
+        console.log(`Successfully verified that user ${userId} is now PREMIUM.`);
+      } else if (verifyUser) {
+        console.error(`Warning: User ${userId} exists but usage_type is '${verifyUser.usage_type}' instead of 'premium'.`);
+      } else {
+        console.error(`Warning: User ${userId} not found during verification.`);
       }
     } catch (error) {
       console.error('Error setting user as PREMIUM:', error);
@@ -47,6 +66,14 @@ program
         user.usage_type = null;
         await updateUserForce(user);
         console.log(`User ${userId} is no longer PREMIUM.`);
+        
+        // Verify the premium status was removed
+        const verifyUser = await getUserByUserId(Number(userId));
+        if (verifyUser && verifyUser.usage_type === null) {
+          console.log(`Successfully verified that user ${userId} is no longer PREMIUM.`);
+        } else {
+          console.error(`Warning: Failed to verify removal of premium status for user ${userId}.`);
+        }
       } else {
         console.log(`User with ID ${userId} not found.`);
       }
