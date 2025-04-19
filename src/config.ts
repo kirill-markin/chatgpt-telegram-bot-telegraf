@@ -30,8 +30,8 @@ const prompts_path = './temp/__temp_config.yaml';
 const fileContents = fs.readFileSync(prompts_path, 'utf8');
 const bot_settings = yaml.parse(fileContents);
 
-export const GPT_MODEL = bot_settings?.gpt_model || 'gpt-4o'; // 'o1-preview'
-export const GPT_MODEL_FOR_IMGAGE_URL = bot_settings?.gpt_model_for_image_url || 'gpt-4o';
+export const GPT_MODEL = bot_settings?.gpt_model || 'gpt-4.1'; // 'gpt-4o '
+export const GPT_MODEL_FOR_IMGAGE_URL = bot_settings?.gpt_model_for_image_url || 'gpt-4.1'; // 'gpt-4o'
 export const maxTokensThreshold = 128000;
 export const averageAnswerTokens = 8000;
 export const MAX_TOKENS_THRESHOLD_TO_REDUCE_HISTORY = maxTokensThreshold - averageAnswerTokens;

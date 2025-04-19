@@ -1,5 +1,5 @@
-gpt_model: "gpt-4o" # "o1-preview"
-gpt_model_for_image_url: "gpt-4o"
+gpt_model: "gpt-4.1" # "o1-preview"
+gpt_model_for_image_url: "gpt-4.1"
 strings:
   help_string: "Bot chatGPT in telegram  — an assistant that understands voice and text messages in any language. \n\nThe answer can take some time. \n\nLet's start! Please ask me something by voice message 🎙, text 💬 or photo 🌄."
   error_string: "An error occurred while processing the message. Let the administrator know to fix it. \n\nOr ChatGPT might be down globally, you can check here: https://status.openai.com/"
