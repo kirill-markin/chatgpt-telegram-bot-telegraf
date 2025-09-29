@@ -54,7 +54,7 @@ describe('OpenAI Functions', () => {
 
       expect(mockOpenAI.chat.completions.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          model: 'gpt-4o',
+          model: 'gpt-5',
           messages: expect.arrayContaining([
             expect.objectContaining({
               content: expect.arrayContaining([
