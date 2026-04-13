@@ -3,9 +3,12 @@
         "module": "nodenext",
         "esModuleInterop": true,
         "target": "es2022",
+        "rootDir": ".",
         "outDir": "dist",
         "strict": true,
-        "moduleResolution": "NodeNext"
+        "moduleResolution": "NodeNext",
+        "isolatedModules": true,
+        "types": ["node", "jest"]
     },
     "include": ["src/**/*.ts", "__tests__/**/*.ts"],
     "exclude": ["dist"]
