@@ -20,6 +20,16 @@ import { reply } from './utils/responseUtils';
 
 export const APPROX_IMAGE_TOKENS = 800;
 
+type ChatCompletionMessageToolCall = OpenAI.Chat.ChatCompletionMessageToolCall;
+type ChatCompletionMessageFunctionToolCall = OpenAI.Chat.ChatCompletionMessageFunctionToolCall;
+type ChatCompletionToolMessageParam = OpenAI.Chat.ChatCompletionToolMessageParam;
+
+function isFunctionToolCall(
+  toolCall: ChatCompletionMessageToolCall,
+): toolCall is ChatCompletionMessageFunctionToolCall {
+  return toolCall.type === 'function';
+}
+
 // default prompt message to add to the GPT model
 
 let defaultPromptMessageObj = {} as MyMessage;
@@ -184,38 +194,41 @@ async function createChatCompletionWithRetries(
         try {
           // Process all tool calls and create corresponding tool messages
           const toolMessages = await Promise.all(
-            toolCalls.map(async (toolCall: OpenAI.Chat.ChatCompletionMessageToolCall) => {
-              if (toolCall.function.name === 'perplexity') {
-                console.log('Processing Perplexity tool call');
-                try {
-                  const args = JSON.parse(toolCall.function.arguments);
-                  const result = await callPerplexity(args.query);
-
-                  // Append sources to the answer if they exist
-                  if (result.sources && result.sources.length > 0) {
-                    result.answer += `\n\nSources:\n${result.sources.join('\n')}`;
-                  }
-
-                  console.log('Perplexity tool call successful');
-                  return {
-                    role: 'tool',
-                    content: JSON.stringify(result),
-                    tool_call_id: toolCall.id, // Important: match the specific tool_call_id
-                  };
-                } catch (error) {
-                  console.error('Perplexity tool call failed:', error);
-                  return {
-                    role: 'tool',
-                    content: JSON.stringify({
-                      answer: "Sorry, I couldn't get additional information from Perplexity. I'll try to answer based on my existing knowledge.",
-                      error: error instanceof Error ? error.message : 'Unknown error',
-                      timestamp: new Date().toISOString()
-                    }),
-                    tool_call_id: toolCall.id,
-                  };
-                }
+            toolCalls.map(async (
+              toolCall: ChatCompletionMessageToolCall,
+            ): Promise<ChatCompletionToolMessageParam | null> => {
+              if (!isFunctionToolCall(toolCall) || toolCall.function.name !== 'perplexity') {
+                return null;
               }
-              return null;
+
+              console.log('Processing Perplexity tool call');
+              try {
+                const args = JSON.parse(toolCall.function.arguments);
+                const result = await callPerplexity(args.query);
+
+                // Append sources to the answer if they exist
+                if (result.sources && result.sources.length > 0) {
+                  result.answer += `\n\nSources:\n${result.sources.join('\n')}`;
+                }
+
+                console.log('Perplexity tool call successful');
+                return {
+                  role: 'tool',
+                  content: JSON.stringify(result),
+                  tool_call_id: toolCall.id, // Important: match the specific tool_call_id
+                };
+              } catch (error) {
+                console.error('Perplexity tool call failed:', error);
+                return {
+                  role: 'tool',
+                  content: JSON.stringify({
+                    answer: "Sorry, I couldn't get additional information from Perplexity. I'll try to answer based on my existing knowledge.",
+                    error: error instanceof Error ? error.message : 'Unknown error',
+                    timestamp: new Date().toISOString()
+                  }),
+                  tool_call_id: toolCall.id,
+                };
+              }
             })
           );
 
