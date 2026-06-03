@@ -4,6 +4,10 @@
   "main": "index.js",
   "author": "Kirill Markin",
   "license": "MIT",
+  "packageManager": "npm@11.16.0",
+  "engines": {
+    "node": "26.3.0"
+  },
   "scripts": {
     "prestart": "node scripts/fetchConfig.js",
     "start": "ts-node --transpile-only src/bot.ts",
@@ -16,12 +20,12 @@
   "dependencies": {
     "@pinecone-database/pinecone": "^7.2.0",
     "axios": "^1.16.1",
-    "commander": "^14.0.3",
+    "commander": "^15.0.0",
     "cross-fetch": "^4.1.0",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "ffmpeg-static": "^5.3.0",
-    "openai": "^6.39.1",
+    "openai": "^6.41.0",
     "pg": "^8.21.0",
     "punycode": "^2.3.1",
     "telegraf": "^4.16.3",
