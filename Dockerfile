@@ -1,6 +1,5 @@
 # Use an official Node.js runtime as a parent image
-# Updated for Railway deployment - Node.js 20 LTS
-FROM node:20-slim AS production
+FROM node:26.3.0-bookworm-slim AS production
 
 # Set the working directory in the container to /app
 WORKDIR /app
