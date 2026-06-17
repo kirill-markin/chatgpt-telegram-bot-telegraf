@@ -4,7 +4,7 @@
   "main": "index.js",
   "author": "Kirill Markin",
   "license": "MIT",
-  "packageManager": "npm@11.16.0",
+  "packageManager": "npm@11.17.0",
   "engines": {
     "node": "26.3.0"
   },
@@ -18,14 +18,14 @@
     "list-premium": "ts-node src/cli.ts list-premium"
   },
   "dependencies": {
-    "@pinecone-database/pinecone": "^7.2.0",
-    "axios": "^1.17.0",
+    "@pinecone-database/pinecone": "^8.0.0",
+    "axios": "^1.18.0",
     "commander": "^15.0.0",
     "cross-fetch": "^4.1.0",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "ffmpeg-static": "^5.3.0",
-    "openai": "^6.42.0",
+    "openai": "^6.43.0",
     "pg": "^8.21.0",
     "punycode": "^2.3.1",
     "telegraf": "^4.16.3",
