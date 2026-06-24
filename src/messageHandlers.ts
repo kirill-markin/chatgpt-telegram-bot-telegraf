@@ -1,5 +1,6 @@
 import fs from "fs";
 import axios from "axios";
+import { randomUUID } from "crypto";
 import { MyContext, MyMessage, UserData, NoOpenAiApiKeyError } from "./types";
 import { ERROR_MESSAGE, MAX_TRIAL_TOKENS, NO_VIDEO_ERROR } from './config';
 import { 
@@ -364,8 +365,7 @@ export async function handlePhotoMessage(ctx: MyContext): Promise<string> {
     const fileId = photo.file_id;
     
     // Generate unique file paths
-    const timestamp = Date.now();
-    const uniqueId = `${fileId}-${timestamp}`;
+    const uniqueId = `${fileId}-${randomUUID()}`;
     const inputFilePath = `./temp/${uniqueId}.jpg`;
     const resizedFilePath = `./temp/${uniqueId}_resized.jpg`;
 
