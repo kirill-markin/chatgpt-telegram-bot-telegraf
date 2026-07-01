@@ -4,9 +4,9 @@
   "main": "index.js",
   "author": "Kirill Markin",
   "license": "MIT",
-  "packageManager": "npm@11.17.0",
+  "packageManager": "npm@11.18.0",
   "engines": {
-    "node": "26.3.1"
+    "node": "26.4.0"
   },
   "scripts": {
     "prestart": "node scripts/fetchConfig.js",
@@ -25,7 +25,7 @@
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "ffmpeg-static": "^5.3.0",
-    "openai": "^6.44.0",
+    "openai": "^6.45.0",
     "pg": "^8.22.0",
     "punycode": "^2.3.1",
     "telegraf": "^4.16.3",
@@ -45,9 +45,11 @@
     "ts-jest": "^29.4.11"
   },
   "overrides": {
-    "glob": "^13.0.6"
+    "glob": "^13.0.6",
+    "js-yaml": "^3.15.0"
   },
   "resolutions": {
-    "glob": "^13.0.6"
+    "glob": "^13.0.6",
+    "js-yaml": "^3.15.0"
   }
 }
