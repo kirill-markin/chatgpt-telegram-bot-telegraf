@@ -4,9 +4,10 @@
   "main": "index.js",
   "author": "Kirill Markin",
   "license": "MIT",
-  "packageManager": "npm@11.18.0",
+  "packageManager": "npm@12.0.1",
   "engines": {
-    "node": "26.4.0"
+    "node": "26.5.0",
+    "npm": "12.0.1"
   },
   "scripts": {
     "prestart": "node scripts/fetchConfig.js",
@@ -17,6 +18,11 @@
     "remove-premium": "ts-node src/cli.ts remove-premium",
     "list-premium": "ts-node src/cli.ts list-premium"
   },
+  "allowScripts": {
+    "ffmpeg-static@5.3.0": true,
+    "fsevents": false,
+    "unrs-resolver@1.12.2": true
+  },
   "dependencies": {
     "@pinecone-database/pinecone": "^8.0.0",
     "axios": "^1.18.1",
@@ -25,7 +31,7 @@
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "ffmpeg-static": "^5.3.0",
-    "openai": "^6.45.0",
+    "openai": "^6.47.0",
     "pg": "^8.22.0",
     "punycode": "^2.3.1",
     "telegraf": "^4.16.3",
@@ -39,7 +45,7 @@
     "@types/fluent-ffmpeg": "^2.1.28",
     "@types/jest": "^30.0.0",
     "@types/pg": "^8.20.0",
-    "@types/supertest": "^7.2.0",
+    "@types/supertest": "^7.2.1",
     "jest": "^30.4.2",
     "supertest": "^7.2.2",
     "ts-jest": "^29.4.11"
