@@ -157,15 +157,14 @@ export const addEvent = async (event: Event) => {
         usage_object,
         usage_completion_tokens,
         usage_prompt_tokens,
-        usage_total_tokens,
-        api_key
+        usage_total_tokens
       )
       VALUES (
         $1, $2,
         $3, $4, $5, $6,
         $7, $8,
         $9, $10, $11, $12, $13,
-        $14, $15, $16, $17, $18, $19
+        $14, $15, $16, $17, $18
       )
       RETURNING *;
     `, [
@@ -191,7 +190,6 @@ export const addEvent = async (event: Event) => {
       event.usage_completion_tokens,
       event.usage_prompt_tokens,
       event.usage_total_tokens,
-      event.api_key,
     ]);
     return res.rows[0];
   } catch (error) {
@@ -243,7 +241,6 @@ export async function storeAnswer(chatResponse: any, ctx: MyContext, userData: U
       usage_completion_tokens: chatResponse.usage?.completion_tokens || null,
       usage_prompt_tokens: chatResponse.usage?.prompt_tokens || null,
       usage_total_tokens: chatResponse.usage?.total_tokens || null,
-      api_key: userData.openai.apiKey || null,
     } as Event);
     console.log(formatLogMessage(ctx, `answer saved to the database. total_tokens for this answer: ${chatResponse.usage?.total_tokens || null}`));
   } catch (error) {
@@ -271,7 +268,6 @@ export async function storeCommand(ctx: MyContext, command: string) {
       usage_completion_tokens: null,
       usage_prompt_tokens: null,
       usage_total_tokens: null,
-      api_key: null,
     } as Event);
     console.log(formatLogMessage(ctx, `${command} saved to the database`));
   } catch (error) {
@@ -279,7 +275,6 @@ export async function storeCommand(ctx: MyContext, command: string) {
   }
 }
 
-// addEvent Simple with only type, message_role, messages_type and this is it
 export async function addSimpleEvent(ctx: MyContext, type: string, message_role: string, messages_type: string) {
   try {
     addEvent({
@@ -300,7 +295,6 @@ export async function addSimpleEvent(ctx: MyContext, type: string, message_role:
       usage_completion_tokens: null,
       usage_prompt_tokens: null,
       usage_total_tokens: null,
-      api_key: null,
     } as Event);
     console.log(formatLogMessage(ctx, `${message_role} saved to the database`));
   } catch (error) {
@@ -329,7 +323,6 @@ export async function addEventByMessageType(ctx: MyContext, eventType: string, m
       usage_completion_tokens: null,
       usage_prompt_tokens: null,
       usage_total_tokens: null,
-      api_key: null,
     } as Event);
     console.log(formatLogMessage(ctx, `${messageType} saved to the database`));
   } catch (error) {
@@ -364,7 +357,6 @@ export async function addTranscriptionEvent(ctx: MyContext, transcriptionText: s
       usage_completion_tokens: null,
       usage_prompt_tokens: null,
       usage_total_tokens: null,
-      api_key: userData.openai.apiKey || null,
     } as Event);
     console.log(formatLogMessage(ctx, `model_transcription saved to the database`));
   } catch (error) {
