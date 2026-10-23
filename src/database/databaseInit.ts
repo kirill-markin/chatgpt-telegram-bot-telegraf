@@ -48,8 +48,7 @@ const createTableQueries = [
     usage_object VARCHAR(255),
     usage_completion_tokens INT,
     usage_prompt_tokens INT,
-    usage_total_tokens INT,
-    api_key VARCHAR(255)
+    usage_total_tokens INT
   );
   `,
   `

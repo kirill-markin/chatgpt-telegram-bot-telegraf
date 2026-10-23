@@ -65,7 +65,6 @@ export interface Event {
   usage_completion_tokens?: number | null;
   usage_prompt_tokens?: number | null;
   usage_total_tokens?: number | null;
-  api_key?: string | null;
 }
 
 export interface UserSettings {
