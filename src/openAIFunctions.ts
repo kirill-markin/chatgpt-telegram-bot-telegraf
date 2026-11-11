@@ -179,6 +179,7 @@ async function createChatCompletionWithRetries(
           stream: false,
           ...(tools && { tools: tools }),
           ...(tools && { tool_choice: 'auto' }),
+          ...(tools && model === 'gpt-5.6-terra' && { reasoning_effort: 'none' as const }),
         }) as Promise<OpenAI.Chat.ChatCompletion>,
         timeoutMs,
       );
